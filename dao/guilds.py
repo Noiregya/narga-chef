@@ -1,7 +1,16 @@
 TABLE_NAME = "guilds"
 
+# - 0 id
+# - 1 guild_name
+# - 2 currency
+# - 3 submission_channel
+# - 4 review_channel
+# - 5 info_channel
+# - 6 leaderboard
+# - 7 cooldown
+
 def insert(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown):
-    cursor.execute("INSERT INTO guilds (id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown) values(%s, %s, %s, %s, %s, %s, %s, %s)",
+    cursor.execute(f"INSERT INTO {TABLE_NAME} (id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown) values(%s, %s, %s, %s, %s, %s, %s, %s)",
         [guild_id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown])
 
 def update(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, cooldown):
@@ -9,11 +18,10 @@ def update(cursor, guild_id, guild_name, currency, submission_channel, review_ch
         [guild_name, currency, submission_channel, review_channel, info_channel, cooldown, guild_id])
 
 def select(cursor, guild_id):
-    cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM guilds where id=%s",
+    cursor.execute(f"SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM {TABLE_NAME} where id=%s",
         [guild_id])
     return cursor.fetchone()
 
 def all(cursor):
-    cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM %s",
-        [TABLE_NAME])
+    cursor.execute(f"SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM {TABLE_NAME}")
     return cursor.fetchone()

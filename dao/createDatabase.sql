@@ -14,6 +14,8 @@ CREATE TABLE members (
     id numeric NOT NULL, 
     nickname text NOT NULL, 
     points numeric NOT NULL,
+    last_submission_time timestamp NOT NULL,
+    last_submission text,
     PRIMARY KEY(guild, id)
 );
 CREATE TABLE requests (
