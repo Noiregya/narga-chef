@@ -1,10 +1,12 @@
 # This example requires the 'message_content' intent.
 import os
+import asyncio
 from interactions import (Client, Intents, listen, slash_command, slash_option, OptionType, SlashContext,
     Member, ChannelType, BaseChannel )
 from interactions.api.events import MessageCreate
 import logging
 import json
+import dao.dao
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,6 +38,11 @@ async def card(ctx: SlashContext, member: Member = None):
     opt_type=OptionType.STRING,
     required=True
 )
+@slash_option(name="cooldown",
+    description="Delay before the member is allowed to submit again (in hours)",
+    opt_type=OptionType.INTEGER,
+    required=True
+)
 @slash_option(name="submission_channel",
     description="Channel you want members to submit to",
     opt_type=OptionType.CHANNEL,
@@ -48,15 +55,14 @@ async def card(ctx: SlashContext, member: Member = None):
     description="Channel you want the leaderboard to be displayed in",
     opt_type=OptionType.CHANNEL,
     required=True)
-async def setup(ctx: SlashContext, currency: str, submission_channel: BaseChannel, review_channel: BaseChannel, info_channel: BaseChannel):
+async def setup(ctx: SlashContext, currency: str, cooldown: int, submission_channel: BaseChannel, review_channel: BaseChannel, info_channel: BaseChannel):
     if submission_channel.type != ChannelType.GUILD_TEXT:
         return await ctx.send("submission_channel is not a text channel",ephemeral=True)
     if review_channel.type != ChannelType.GUILD_TEXT:
         return await ctx.send("review_channel is not a text channel",ephemeral=True)
     if info_channel.type != ChannelType.GUILD_TEXT:
         return await ctx.send("info_channel is not a text channel",ephemeral=True)
-    dao.setup(ctx.server.id, ctx.server.name, currency, submission_channel.id, review_channel.id, info_channel.id)
+    dao.dao.setup(ctx.guild.id, ctx.guild.name, currency, submission_channel.id, review_channel.id, info_channel.id, cooldown)
     return await ctx.send("Setup complete. Enjoy!")
-
 
 bot.start(TOKEN)

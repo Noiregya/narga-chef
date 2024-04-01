@@ -1,17 +1,19 @@
 TABLE_NAME = "guilds"
 
-async def insert(cursor, id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard):
-    return cursor.execute("INSERT INTO %s (id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard) values(%s, %s, %s, %s, %s, %s, %s)",
-        (TABLE_NAME, id, guild_name, currency, submission_channel, review_channel, info_channel))
+def insert(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown):
+    cursor.execute("INSERT INTO guilds (id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown) values(%s, %s, %s, %s, %s, %s, %s, %s)",
+        [guild_id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown])
 
-async def update(cursor, id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard):
-    return cursor.execute("UPDATE %s SET (guild_name=%s, currency=%s, submission_channel=%s, review_channel=%s, info_channel=%s, leaderboard=%s) WHERE id=%s",
-        (TABLE_NAME, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, id))
+def update(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, cooldown):
+    cursor.execute(f"UPDATE {TABLE_NAME} SET guild_name=%s, currency=%s, submission_channel=%s, review_channel=%s, info_channel=%s, cooldown=%s WHERE id=%s",
+        [guild_name, currency, submission_channel, review_channel, info_channel, cooldown, guild_id])
 
-async def select(cursor, id):
-    return cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard FROM %s where id=%d",
-        (TABLE_NAME, id))
+def select(cursor, guild_id):
+    cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM guilds where id=%s",
+        [guild_id])
+    return cursor.fetchone()
 
-async def all(cursor):
-    return cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard FROM %s",
-        (TABLE_NAME))
+def all(cursor):
+    cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM %s",
+        [TABLE_NAME])
+    return cursor.fetchone()

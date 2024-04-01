@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Debug bot",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "bot.py",
             "console": "integratedTerminal"
         }
     ]

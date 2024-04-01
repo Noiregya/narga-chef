@@ -1,20 +1,23 @@
+import os
+from dotenv import load_dotenv
 import psycopg
-import guilds
-import members
-import options
-import requests
+import dao.guilds
+import dao.members
+import dao.options
+import dao.requests
 
-async with await psycopg.AsyncConnection.connect(
-        "dbname=narga user=narga") as connection:
-    async with connection.cursor() as cursor:
-        await cursor.execute(
-            "INSERT INTO test (num, data) VALUES (%s, %s)",
-            (100, "abc'def"))
-        await cursor.execute("SELECT * FROM test")
-        await cursor.fetchone()
-        # will return (1, 100, "abc'def")
-        async for record in cursor:
-            print(record)
+HOST = os.environ["host"]
+PASSWORD = os.environ["password"]
 
-def setup(guild: int, guild_name: int, currency: str, submission_channel: int, review_channel: int, info_channel: int):
-    print(id)
+# connection = psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}")
+
+def setup(guild_id: int, guild_name: int, currency: str, submission_channel: int, review_channel: int, info_channel: int, cooldown: int):
+    with psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            res = dao.guilds.select(cursor, guild_id)
+            #cursor.execute("SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM guilds where id=%s"
+            #    ,[guild_id])
+            if(res != None):
+                dao.guilds.update(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, cooldown)
+            else:
+                dao.guilds.insert(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, None, cooldown)

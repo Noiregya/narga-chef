@@ -1,3 +1,4 @@
 .env
 prices.txt
-narga/*
+narga
+dao/__pycache__
