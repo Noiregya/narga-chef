@@ -24,4 +24,4 @@ def select(cursor, guild_id):
 
 def all(cursor):
     cursor.execute(f"SELECT id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown FROM {TABLE_NAME}")
-    return cursor.fetchone()
+    return cursor.fetchall()

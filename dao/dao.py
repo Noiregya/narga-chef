@@ -47,3 +47,18 @@ def getMember(guild_id: int, member_id: int, nickname: str):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
             return refreshAndGetMember(cursor, guild_id, member_id, nickname)
+
+def requestRegister(guild_id, name, effect, value):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.requests.insert(cursor, guild_id, name, effect, value)
+
+def requestDelete(guild_id, name, effect):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.requests.delete(cursor, guild_id, name, effect)
+
+def requestAll(guild_id):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.requests.all(cursor, guild_id)

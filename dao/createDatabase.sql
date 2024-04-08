@@ -21,9 +21,9 @@ CREATE TABLE members (
 CREATE TABLE requests (
     guild numeric NOT NULL, 
     request_name text NOT NULL, 
-    requirements text NOT NULL,
-    comment text,
-    PRIMARY KEY(guild, request_name)
+    effect text NOT NULL,
+    value numeric NOT NULL,
+    PRIMARY KEY(guild, request_name, effect)
 );
 CREATE TABLE options (
     guild numeric NOT NULL, 

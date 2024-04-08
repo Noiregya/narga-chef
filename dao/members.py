@@ -22,7 +22,7 @@ def select(cursor, guild_id, member_id):
 
 def all(cursor):
     cursor.execute(f"SELECT guild, id, nickname, points, last_submission_time, last_submission FROM {TABLE_NAME}")
-    return cursor.fetchone()
+    return cursor.fetchall()
 
 def rank(cursor, guild_id, member_id):
     cursor.execute(f"SELECT guild, id, ROW_NUMBER() OVER(ORDER BY points DESC) FROM {TABLE_NAME} where guild=%s AND id=%s",
