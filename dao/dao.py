@@ -58,7 +58,24 @@ def requestDelete(guild_id, name, effect):
         with connection.cursor() as cursor:
             return dao.requests.delete(cursor, guild_id, name, effect)
 
-def requestAll(guild_id):
+def getRequest(guild_id, name, effect):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
-            return dao.requests.all(cursor, guild_id)
+            return dao.requests.selectOne(cursor, guild_id, name, effect)
+
+def requests(guild_id, name, effect):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.requests.select(cursor, guild_id, name, effect)
+
+# Groups every column in lists 
+def requestPerColumn(guid_id, name = None, effect = None):
+    db_res = requests(guid_id, name, effect)
+    name = []
+    effect = []
+    value = []
+    for row in db_res:
+        name.append(row[1])
+        effect.append(row[2])
+        value.append(row[3])
+    return [name, effect, value]

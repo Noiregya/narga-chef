@@ -4,9 +4,9 @@ import datetime
 import calendar
 from interactions import (Client, Intents, 
     listen, slash_command, slash_option, OptionType, SlashContext, 
-    Embed, EmbedField,
-    Permissions, Member, ChannelType, BaseChannel )
-from interactions.api.events import MessageCreate
+    Embed, EmbedField, StringSelectMenu, Button, ButtonStyle, ActionRow, spread_to_rows,
+    Permissions, Member, ChannelType, BaseChannel, CallbackType)
+from interactions.api.events import MessageCreate, Component
 import logging
 import json
 import dao.dao
@@ -18,11 +18,113 @@ PURPLE = "#7f03fc"
 AQUAMARINE = "#00edd9"
 ONE_HOUR = 3600
 
-bot = Client(intents=Intents.DEFAULT)
+intents = Intents.MESSAGE_CONTENT | Intents.GUILD_MESSAGES | Intents.GUILDS
+bot = Client(intents=intents)
+
+eventDictionnary = {}
 
 @listen()
-async def on_message_create(event: MessageCreate):
-    event.message  # actual message
+async def on_message_create(ctx: MessageCreate):
+    image = get_first_image_attachement(ctx.message)
+    if(image != None):
+        # Check input and fetch from database
+        guild_error = check_in_guild(ctx.message)
+        if(guild_error != None):
+            return await ctx.message.reply(guild_error, ephemeral=True)
+        is_setup, db_guild = check_guild_setup(ctx.message.guild.id)
+        if(is_setup == False):
+            return await ctx.message.reply(db_guild, ephemeral=True)
+        if(ctx.message.channel.id == db_guild[3]): #Message is in the submission channel
+            # return await ctx.message.reply(f"Received your submission {image.url}") # TODO: prompt form and submit for review
+            # Persist url in database + read interactions and persist answers
+            eventDictionnary[f"request,image,{ctx.message.id},{ctx.message.author.id}"] = image.url
+            db_requests = dao.dao.requestPerColumn(ctx.message.guild.id)
+            return await ctx.message.reply("Please tell us about your request", 
+                components=ask_info_request_component(db_requests, ctx.message.author.id, ctx.message.id))
+
+@listen(Component)
+async def on_component(event: Component):
+    ctx = event.ctx
+    event_type,event_context,unique,extra1 = ctx.custom_id.split(",")
+    image = eventDictionnary.get(f"{event_type},image,{unique},{ctx.member.id}")
+    response_type = CallbackType.UPDATE_MESSAGE
+    logging.error(f"{ctx.custom_id}")
+    match [event_type,event_context,unique,extra1]: #Read component event id
+        # Name field has been set
+        case ["request","name",*_]:
+            if(image != None): # An image URL have been saved   
+                name = ctx.values[0]
+                effect = eventDictionnary.get(f"{event_type},effect,{unique},{ctx.member.id}")
+                if(effect != None): # Every element has been set
+                    response = await send_to_review(ctx, image, name, effect, unique)
+                    # Delete event from the event dictionnary
+                    del eventDictionnary[f"{event_type},effect,{unique},{ctx.member.id}"]
+                    del eventDictionnary[f"{event_type},image,{unique},{ctx.member.id}"]
+                else: # Effect isn't set yet
+                    eventDictionnary[f"{event_type},name,{unique},{ctx.member.id}"] = name
+                    db_requests = dao.dao.requestPerColumn(ctx.guild.id, name=name)
+                    return await ctx.edit_origin(content="Please tell us about your request", 
+                        components=ask_info_request_component(db_requests, ctx.message.author.id, unique, name=name))
+            else:
+                response = "Sorry, we lost your image... Please submit your request again"
+        # Effect field has been set
+        case ["request","effect",*_]:
+            if(image != None):
+                effect = ctx.values[0]
+                name = eventDictionnary.get(f"{event_type},name,{unique},{ctx.member.id}")
+                if(name != None): # Every element has been set
+                    response = await send_to_review(ctx, image, name, effect, unique)
+                    # Delete event from the event dictionnary
+                    del eventDictionnary[f"{event_type},name,{unique},{ctx.member.id}"]
+                    del eventDictionnary[f"{event_type},image,{unique},{ctx.member.id}"]
+                else: # Name isn't set yet
+                    eventDictionnary[f"{event_type},effect,{unique},{ctx.member.id}"] = effect
+                    db_requests = dao.dao.requestPerColumn(ctx.guild.id, effect=effect)
+                    return await ctx.edit_origin(content="Please tell us about your request", 
+                        components=ask_info_request_component(db_requests, ctx.message.author.id, unique, effect=effect))
+            else:
+                response = "Sorry, we lost your image... Please submit your request again"
+        case _:
+            response = f"Something went wrong, unknown interaction {ctx.custom_id}"
+    return await ctx.edit_origin(content=response, components=[])
+
+# TODO: move down
+async def send_to_review(ctx, image, name, effect, unique):
+    guild = ctx.guild.id
+    member = ctx.user.id
+    db_request = dao.dao.getRequest(guild, name, effect)
+    if(len(db_request) == 0):
+        return f"{name} with effect {effect} doesn't exist. Please select a possible combination."
+    db_guild =  dao.dao.getGuild(guild)
+    if(len(db_guild) == 0):
+        return "Please setup the guild again"
+    await send_review_message(ctx, image, db_guild, db_request, unique)
+    return f"You have fullfilled the request for {name}: {effect}, review is in progress"
+
+async def send_review_message(ctx, image, db_guild, db_request, unique):
+    member = ctx.user.id
+    channel = await ctx.guild.fetch_channel(db_guild[4])
+    if(channel == None):
+        return await ctx.channel.send(f"Error, I cannot see channel <#{db_guild[4]}>, check the setup and bot rights")
+    custom_id_base = f"review,{member},{unique}"
+    components = generate_review_component(custom_id_base)
+    return await channel.send(f"{image}\n<@{member}> submitted {db_request[1]} with effect {db_request[2]} and value {db_request[3]}",components=components, attachements=image)
+
+def generate_review_component(custom_id_base):
+    return [
+        ActionRow(
+            Button(
+                style=ButtonStyle.RED,
+                label="Deny",
+                custom_id = f"{custom_id_base},deny",
+            ),
+            Button(
+                style=ButtonStyle.GREEN,
+                label="Accept",
+                custom_id = f"{custom_id_base},accept",
+            )
+        )
+    ]
 
 @slash_command(name="setup",
     description="Set up the bot for this server",
@@ -145,7 +247,7 @@ async def request_list(ctx: SlashContext):
     if(is_setup == False):
         return await ctx.send(error)
     # Business
-    db_requests = dao.dao.requestAll(ctx.guild.id)
+    db_requests = dao.dao.requests(ctx.guild.id, None, None)
     return await ctx.send(embed=requests_embed(db_requests))
 
 def check_in_guild(context):
@@ -157,7 +259,6 @@ def check_guild_setup(guild_id):
     if(db_guild == None):
         return [False, "Please register this server by using the /setup command"]
     return [True, db_guild]
-
 
 def guild_card_embed(member, guild, rank):
     points = EmbedField(name=guild[2], value=str(member[3]), inline=True)
@@ -172,5 +273,31 @@ def requests_embed(requests):
     for request in requests:
         fields.append(EmbedField(name=request[1], value=f"**Effect:** {request[2]}, **Value:** {request[3]}"))
     return Embed(color=AQUAMARINE, title="Available requests:", fields=fields)
+
+def get_first_image_attachement(message):
+    for attachement in message.attachments:
+        if(attachement.content_type.startswith("image")):
+            return attachement
+    return None
+
+def ask_info_request_component(db_requests, member_id, message_id, name="Request name", effect="Request effect"):
+    res: list[ActionRow] = spread_to_rows(
+        StringSelectMenu(
+        db_requests[0],
+        placeholder=name,
+        min_values=1,
+        max_values=1,
+        custom_id=f"request,name,{message_id},{member_id}",
+        ),
+        StringSelectMenu(
+        db_requests[1],
+        placeholder=effect,
+        min_values=1,
+        max_values=1,
+        custom_id=f"request,effect,{message_id},{member_id}",
+        )
+    )
+    logging.info(res)
+    return res
 
 bot.start(TOKEN)

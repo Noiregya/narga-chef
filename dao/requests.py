@@ -17,12 +17,21 @@ def delete(cursor, guild, request_name, effect):
     cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE guild=%s AND request_name=%s AND effect=%s",
         [guild, request_name, effect])
 
-def select(cursor, guild, request_name, effect):
+def selectOne(cursor, guild, request_name, effect):
     cursor.execute(f"SELECT guild, request_name, effect, value FROM {TABLE_NAME} where guild=%s AND request_name=%s AND effect=%s",
         [guild, request_name, effect])
     return cursor.fetchone()
 
-def all(cursor, guild):
-    cursor.execute(f"SELECT guild, request_name, effect, value FROM {TABLE_NAME} where guild=%s",
-        [guild])
+# A select with optionnal name and effect
+def select(cursor, guild, request_name, effect):
+    req = f"SELECT guild, request_name, effect, value FROM {TABLE_NAME} where guild=%s "
+    parm = []
+    if(effect != None):
+        req = f"{req} AND effect=%s "
+        parm.insert(0,effect)
+    if(request_name != None):
+        req = f"{req} AND request_name=%s "
+        parm.insert(0,request_name)
+    parm.insert(0, guild)
+    cursor.execute(req,parm)
     return cursor.fetchall()

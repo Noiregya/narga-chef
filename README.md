@@ -15,3 +15,6 @@ You will need a postgresql database for this. Copy sql/createDatabase.sql to the
 This should be done after every update.
 ## Run the bot
 -
+
+## More
+* [The bot needs message content intents](https://discord.com/developers/docs/topics/gateway#message-content-intent)

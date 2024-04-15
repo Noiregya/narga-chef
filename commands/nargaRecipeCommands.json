@@ -1,0 +1,47 @@
+[
+  {
+    "name": "card",
+    "description": "Show the member's clan card.",
+    "options": [
+      {
+        "name": "member",
+        "description": "The member you want to see the card of.",
+        "type": 6,
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "recipe_register",
+    "type": 1,
+    "description": "Register a recipe and set its value",
+    "options": [
+        {
+            "name": "dish",
+            "description": "Name of the dish",
+            "type": 3,
+            "required": true,
+            "choices": [
+                {
+                    "name": "Guild's Yaminabe",
+                    "value": "guilds_yaminabe"
+                },
+                {
+                    "name": "Spicy Bakudandon",
+                    "value": "spicy_bakudandon"
+                },
+                {
+                    "name": "Pioneer Exciting Meal",
+                    "value": "animal_penguin"
+                }
+            ]
+        },
+        {
+            "name": "only_smol",
+            "description": "Whether to show only baby animals",
+            "type": 5,
+            "required": False
+        }
+    ]
+  }
+]
