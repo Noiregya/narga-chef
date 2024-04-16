@@ -68,6 +68,11 @@ def requests(guild_id, name, effect):
         with connection.cursor() as cursor:
             return dao.requests.select(cursor, guild_id, name, effect)
 
+def add_points(guild_id, member_id, points):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.members.add_points(cursor, guild_id, member_id, points)
+
 # Groups every column in lists 
 def requestPerColumn(guid_id, name = None, effect = None):
     db_res = requests(guid_id, name, effect)
