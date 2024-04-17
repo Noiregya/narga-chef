@@ -27,16 +27,12 @@ eventDictionnary = {}
 async def on_message_create(ctx: MessageCreate):
     image = get_first_image_attachement(ctx.message)
     if(image != None):
+        is_setup, db_guild = check_guild_setup(ctx.message.guild.id)
         # Check input and fetch from database
         guild_error = check_in_guild(ctx.message)
-        if(guild_error != None):
-            return await ctx.message.reply(guild_error, ephemeral=True)
-        is_setup, db_guild = check_guild_setup(ctx.message.guild.id)
-        if(is_setup == False):
-            return await ctx.message.reply(db_guild, ephemeral=True)
+        if(guild_error != None or is_setup == False):
+            return
         if(ctx.message.channel.id == db_guild[3]): #Message is in the submission channel
-            # return await ctx.message.reply(f"Received your submission {image.url}") # TODO: prompt form and submit for review
-            # Persist url in database + read interactions and persist answers
             eventDictionnary[f"request,image,{ctx.message.id},{ctx.message.author.id}"] = image.url
             db_requests = dao.dao.requestPerColumn(ctx.message.guild.id)
             return await ctx.message.reply("Please tell us about your request", 
