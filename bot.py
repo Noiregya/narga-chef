@@ -193,7 +193,7 @@ async def request_register(ctx: SlashContext, name: str, effect: str, value: str
     required=True)
 async def request_delete(ctx: SlashContext, name: str, effect: str):
     # Check input and fetch from database
-    guild_error = check_in_guild(context)
+    guild_error = check_in_guild(ctx)
     if(guild_error != None):
         return await ctx.send(guild_error)
     is_setup, error = check_guild_setup(ctx.guild.id)
