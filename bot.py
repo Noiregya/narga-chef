@@ -243,7 +243,7 @@ def guild_card_embed(member, guild, rank):
 #    return Embed(color=AQUAMARINE, title="Available requests:", fields=fields)
 
 def requests_content(requests):
-    res = "```csv\nName; Effect; Value"
+    res = "```csv\nName; Effect; Value\n"
     for request in requests:
         res = f"{res}{request[1]};{request[2]};{request[3]}\n"
     return f"{res}```"
