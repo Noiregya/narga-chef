@@ -7,6 +7,8 @@ import dao.members
 import dao.options
 import dao.requests
 
+load_dotenv()
+
 HOST = os.environ.get("host")
 PASSWORD = os.environ.get("password")
 DB_USER = os.environ.get("db_user")

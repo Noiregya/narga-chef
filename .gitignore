@@ -3,3 +3,9 @@ prices.txt
 narga
 dao/__pycache__
 run.sh
+bin/*
+lib/*
+lib64/*
+logs/*
+out.logs
+pyvenv.cfg
