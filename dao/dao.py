@@ -7,9 +7,9 @@ import dao.members
 import dao.options
 import dao.requests
 
-HOST = os.environ["host"]
-PASSWORD = os.environ["password"]
-DB_USER = os.environ["db_user"]
+HOST = os.environ.get("host")
+PASSWORD = os.environ.get("password")
+DB_USER = os.environ.get("db_user")
 DB_NAME = "narga"
 
 # connection = psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}")
@@ -83,4 +83,7 @@ def requestPerColumn(guid_id, name = None, effect = None):
         name.append(row[1])
         effect.append(row[2])
         value.append(row[3])
+    name = list(dict.fromkeys(name))
+    effect = list(dict.fromkeys(effect))
+    value = list(dict.fromkeys(value))
     return [name, effect, value]

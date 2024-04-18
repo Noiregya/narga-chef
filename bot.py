@@ -13,7 +13,7 @@ import dao.dao
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.environ["token"]
+TOKEN = os.environ.get("token")
 PURPLE = "#7f03fc"
 AQUAMARINE = "#00edd9"
 ONE_HOUR = 3600
@@ -35,8 +35,9 @@ async def on_message_create(ctx: MessageCreate):
         if(ctx.message.channel.id == db_guild[3]): #Message is in the submission channel
             eventDictionnary[f"request,image,{ctx.message.id},{ctx.message.author.id}"] = image.url
             db_requests = dao.dao.requestPerColumn(ctx.message.guild.id)
+            # if
             return await ctx.message.reply("Please tell us about your request", 
-                components=ask_info_request_component(db_requests, ctx.message.author.id, ctx.message.id))
+                components=ask_info_request_component(db_requests[0], ctx.message.author.id, ctx.message.id, name="Request Name", variation="name"))
 
 @listen(Component)
 async def on_component(event: Component):
@@ -49,15 +50,10 @@ async def on_component(event: Component):
             image = eventDictionnary.get(f"{event_type},image,{unique},{ctx.member.id}")
             if(image != None): # An image URL have been saved   
                 name = ctx.values[0]
-                effect = eventDictionnary.get(f"{event_type},effect,{unique},{ctx.member.id}")
-                if(effect != None): # Every element has been set
-                    response = await send_to_review(ctx, image, name, effect, unique)
-                    # Delete event from the event dictionnary
-                else: # Effect isn't set yet
-                    eventDictionnary[f"{event_type},name,{unique},{ctx.member.id}"] = name
-                    db_requests = dao.dao.requestPerColumn(ctx.guild.id, name=name)
-                    return await ctx.edit_origin(content="Please tell us about your request", 
-                        components=ask_info_request_component(db_requests, ctx.message.author.id, unique, name=name))
+                eventDictionnary[f"{event_type},name,{unique},{ctx.member.id}"] = name
+                db_requests = dao.dao.requestPerColumn(ctx.guild.id, name=name)
+                return await ctx.edit_origin(content="Please tell us about your request", 
+                components=ask_info_request_component(db_requests[1], ctx.message.author.id, unique, name="Request Effect", variation="effect"))
             else:
                 response = "Sorry, we lost your image... Please submit your request again"
         # Effect field has been set
@@ -66,13 +62,7 @@ async def on_component(event: Component):
             if(image != None):
                 effect = ctx.values[0]
                 name = eventDictionnary.get(f"{event_type},name,{unique},{ctx.member.id}")
-                if(name != None): # Every element has been set
-                    response = await send_to_review(ctx, image, name, effect, unique)
-                else: # Name isn't set yet
-                    eventDictionnary[f"{event_type},effect,{unique},{ctx.member.id}"] = effect
-                    db_requests = dao.dao.requestPerColumn(ctx.guild.id, effect=effect)
-                    return await ctx.edit_origin(content="Please tell us about your request", 
-                        components=ask_info_request_component(db_requests, ctx.message.author.id, unique, effect=effect))
+                response = await send_to_review(ctx, image, name, effect, unique)
             else:
                 response = "Sorry, we lost your image... Please submit your request again"
         case ["accept",*_]:
@@ -258,22 +248,15 @@ def get_first_image_attachement(message):
             return attachement
     return None
 
-def ask_info_request_component(db_requests, member_id, message_id, name="Request name", effect="Request effect"):
-    res: list[ActionRow] = spread_to_rows(
+def ask_info_request_component(options, member_id, message_id, name="Request name", variation="name"):
+    res: list[ActionRow] = spread_to_rows( # TODO: check size limit
         StringSelectMenu(
-        db_requests[0],
+        options,
         placeholder=name,
         min_values=1,
         max_values=1,
-        custom_id=f"request,name,{message_id},{member_id}",
+        custom_id=f"request,{variation},{message_id},{member_id}",
         ),
-        StringSelectMenu(
-        db_requests[1],
-        placeholder=effect,
-        min_values=1,
-        max_values=1,
-        custom_id=f"request,effect,{message_id},{member_id}",
-        )
     )
     logging.info(res)
     return res
@@ -282,7 +265,7 @@ async def send_to_review(ctx, image, name, effect, unique):
     guild = ctx.guild.id
     member = ctx.user.id
     db_request = dao.dao.getRequest(guild, name, effect)
-    if(len(db_request) == 0):
+    if(db_request == None or len(db_request) == 0):
         return f"{name} with effect {effect} doesn't exist. Please select a possible combination."
     db_guild =  dao.dao.getGuild(guild)
     if(len(db_guild) == 0):
