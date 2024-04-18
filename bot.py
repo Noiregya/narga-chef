@@ -216,7 +216,7 @@ async def request_list(ctx: SlashContext):
         return await ctx.send(error)
     # Business
     db_requests = dao.dao.requests(ctx.guild.id, None, None)
-    return await ctx.send(embed=requests_embed(db_requests))
+    return await ctx.send(content=requests_content(db_requests))
 
 def check_in_guild(context):
     if(context.guild == None):
@@ -236,11 +236,17 @@ def guild_card_embed(member, guild, rank):
     embed = Embed(color=PURPLE, title=f"Guild card for {member[2]}", fields=[points, rank, cooldown])
     return embed
 
-def requests_embed(requests):
-    fields = []
+#def requests_embed(requests):
+#    fields = []
+#    for request in requests:
+#        fields.append(EmbedField(name=request[1], value=f"**Effect:** {request[2]}, **Value:** {request[3]}"))
+#    return Embed(color=AQUAMARINE, title="Available requests:", fields=fields)
+
+def requests_content(requests):
+    res = "```csv\nName; Effect; Value"
     for request in requests:
-        fields.append(EmbedField(name=request[1], value=f"**Effect:** {request[2]}, **Value:** {request[3]}"))
-    return Embed(color=AQUAMARINE, title="Available requests:", fields=fields)
+        res = f"{res}{request[1]};{request[2]};{request[3]}\n"
+    return f"{res}```"
 
 def get_first_image_attachement(message):
     for attachement in message.attachments:
