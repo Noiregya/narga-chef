@@ -34,61 +34,70 @@ async def on_message_create(ctx: MessageCreate):
         if(guild_error != None or is_setup == False):
             return
         if(ctx.message.channel.id == db_guild[3]): #Message is in the submission channel
-            eventDictionnary[f"request,image,{ctx.message.id},{ctx.message.author.id}"] = image.url
-            db_requests = dao.dao.requestPerColumn(ctx.message.guild.id)
-            # if
+            eventDictionnary[f"image,{ctx.message.author.id},{ctx.message.id}"] = image.url
+            type_list = dao.dao.requestPerColumn(ctx.message.guild.id)["type"]
+            if(len(type_list)==0):
+                return await ctx.send(f"Please start by registering requests")
             return await ctx.message.reply("Please tell us about your request", 
-                components=ask_info_request_component(db_requests[0], ctx.message.author.id, ctx.message.id, name="Request Name", variation="name"))
+                components=ask_info_request_component(
+                    type_list, 
+                    ctx.message.author.id, 
+                    ctx.message.id, name="Request Type", variation="type"))
 
 @listen(Component)
 async def on_component(event: Component):
     ctx = event.ctx
-    event_type,event_context,unique,data1 = ctx.custom_id.split(",")
+    event_type,req_member,unique,data1 = ctx.custom_id.split(",")
     response_type = CallbackType.UPDATE_MESSAGE
-    match [event_type,event_context,unique,data1]: #Read component event id
+    match [event_type,req_member,unique,data1]: #Read component event id
         # Name field has been set
-        case ["request","name",*_]:
-            image = eventDictionnary.get(f"{event_type},image,{unique},{ctx.member.id}")
-            if(image != None): # An image URL have been saved   
-                name = ctx.values[0]
-                eventDictionnary[f"{event_type},name,{unique},{ctx.member.id}"] = name
-                db_requests = dao.dao.requestPerColumn(ctx.guild.id, name=name)
-                return await ctx.edit_origin(content="Please tell us about your request", 
-                components=ask_info_request_component(db_requests[1], ctx.message.author.id, unique, name="Request Effect", variation="effect"))
-            else:
-                response = "Sorry, we lost your image... Please submit your request again"
+        case ["type",*_]:
+            request_type = ctx.values[0]
+            eventDictionnary[f"{event_type},{req_member},{unique}"] = request_type
+            name_list = dao.dao.requestPerColumn(ctx.guild.id, request_type=request_type)["name"]
+            if(len(name_list)==0):
+                return await ctx.send(f"Could not find any {request_type}")
+            return await ctx.edit_origin(content=f"Please tell us about your {request_type}", 
+            components=ask_info_request_component(name_list, req_member, unique, name="Request Name", variation="name"))
+        case ["name",*_]: 
+            name = ctx.values[0]
+            request_type = eventDictionnary.get(f"type,{req_member},{unique}")
+            eventDictionnary[f"{event_type},{req_member},{unique}"] = name
+            effect_list = dao.dao.requestPerColumn(ctx.guild.id, request_type=request_type, name=name)["effect"]
+            if(len(effect_list)==0):
+                return await ctx.send(f"Could not find an effect for this {request_type}")
+            return await ctx.edit_origin(content=f"Please tell us about your {request_type}", 
+            components=ask_info_request_component(effect_list, req_member, unique, name="Request Effect", variation="effect"))
         # Effect field has been set
-        case ["request","effect",*_]:
-            image = eventDictionnary.get(f"{event_type},image,{unique},{ctx.member.id}")
-            if(image != None):
+        case ["effect",*_]:
+            image = eventDictionnary.get(f"image,{req_member},{unique}")
+            request_type = eventDictionnary.get(f"type,{req_member},{unique}")
+            if(image != None and request_type != None):
                 effect = ctx.values[0]
-                name = eventDictionnary.get(f"{event_type},name,{unique},{ctx.member.id}")
-                response = await send_to_review(ctx, image, name, effect, unique)
+                name = eventDictionnary.get(f"name,{req_member},{unique}")
+                response = await send_to_review(ctx, image, request_type, name, effect, unique)
             else:
-                response = "Sorry, we lost your image... Please submit your request again"
+                response = "Sorry, we lost track of your request... Please submit again"
         case ["accept",*_]:
             value = data1
-            request_member = event_context
-            image = eventDictionnary.get(f"request,image,{unique},{event_context}")
-            dao.dao.add_points(ctx.guild.id, request_member, value)
-            clear_events(unique, request_member)
-            await notify_member(ctx, request_member, unique, value, fulfilled = True)
-            return await ctx.edit_origin(content=f"{image} Request accepted by <@{ctx.member.id}> and {value} points awarded to <@{request_member}>", components=[])
+            image = eventDictionnary.get(f"image,{req_member},{unique}")
+            dao.dao.add_points(ctx.guild.id, req_member, value)
+            clear_events(unique, req_member)
+            await notify_member(ctx, req_member, unique, value, fulfilled = True)
+            return await ctx.edit_origin(content=f"{image} Request accepted by <@{ctx.member.id}> and {value} points awarded to <@{req_member}>", components=[])
         case ["deny",*_]:
-            custom_id = f"reason,{event_context},{unique},{data1}"
             modal = getDenialReasonModal()
             value = data1
-            request_member = event_context
-            image = eventDictionnary.get(f"request,image,{unique},{event_context}")
+            image = eventDictionnary.get(f"image,{req_member},{unique}")
             await ctx.send_modal(modal=modal)
             # Response received
             modal_ctx: ModalContext = await ctx.bot.wait_for_modal(modal)
             paragraph = modal_ctx.responses["reason"]
-            dao.dao.add_points(ctx.guild.id, request_member, value)
-            clear_events(unique, request_member)
-            await notify_member(ctx, request_member, unique, value, reason = paragraph, fulfilled = False)
+            dao.dao.add_points(ctx.guild.id, req_member, value)
+            clear_events(unique, req_member)
+            await notify_member(ctx, req_member, unique, value, reason = paragraph, fulfilled = False)
             await modal_ctx.send(content="Processing", ephemeral=True, delete_after=1.0)
-            return await ctx.message.edit(content=f"{image} Request from <@{request_member}> denied by <@{ctx.member.id}> for reason:\n{paragraph}", components=[])
+            return await ctx.message.edit(content=f"{image} Request from <@{req_member}> denied by <@{ctx.member.id}> for reason:\n{paragraph}", components=[])
         case _:
             response = f"Something went wrong, unknown interaction {ctx.custom_id}"
     return await ctx.edit_origin(content=response, components=[])
@@ -108,9 +117,9 @@ def getDenialReasonModal():
 def clear_events(unique, member):
     # Delete event from the event dictionnary
     try:
-        del eventDictionnary[f"request,name,{unique},{member}"]
-        del eventDictionnary[f"request,effect,{unique},{member}"]
-        del eventDictionnary[f"request,image,{unique},{member}"]
+        del eventDictionnary[f"name,{unique},{member}"]
+        del eventDictionnary[f"effect,{unique},{member}"]
+        del eventDictionnary[f"image,{unique},{member}"]
     except:
         logging.info("Unable to delete event from the dictionnary")
 
@@ -177,6 +186,10 @@ async def card(ctx: SlashContext, member: Member = None):
 @slash_command(name="request_register",
     description="Register a request and set its value",
     default_member_permissions=Permissions.ADMINISTRATOR)
+@slash_option(name="request_type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    required=True)
 @slash_option(name="name",
     description="Name of the request",
     opt_type=OptionType.STRING,
@@ -189,7 +202,8 @@ async def card(ctx: SlashContext, member: Member = None):
     description="Reward for making the request",
     opt_type=OptionType.INTEGER,
     required=True)
-async def request_register(ctx: SlashContext, name: str, effect: str, value: str):
+async def request_register(ctx: SlashContext, request_type: str, name: str, effect: str, value: str):
+    request_type = request_type.lower()
     # Check input and fetch from database
     guild_error = check_in_guild(ctx)
     if(guild_error != None):
@@ -197,12 +211,16 @@ async def request_register(ctx: SlashContext, name: str, effect: str, value: str
     is_setup, error = check_guild_setup(ctx.guild.id)
     if(is_setup == False):
         return await ctx.send(error)
-    dao.dao.requestRegister(ctx.guild.id, name, effect, value)
-    return await ctx.send(f"Request {name} with effect {effect} and value {value} added")
+    dao.dao.requestRegister(ctx.guild.id, request_type.lower(), name.lower(), effect.lower(), value)
+    return await ctx.send(f"{request_type.capitalize()} {name} with effect {effect} and value {value} added")
 
 @slash_command(name="request_delete",
     description="Delete a request",
     default_member_permissions=Permissions.ADMINISTRATOR)
+@slash_option(name="type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    required=True)
 @slash_option(name="name",
     description="Name of the request",
     opt_type=OptionType.STRING,
@@ -211,7 +229,8 @@ async def request_register(ctx: SlashContext, name: str, effect: str, value: str
     description="Effect of the request",
     opt_type=OptionType.STRING,
     required=True)
-async def request_delete(ctx: SlashContext, name: str, effect: str):
+async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
+    request_type = request_type.lower()
     # Check input and fetch from database
     guild_error = check_in_guild(ctx)
     if(guild_error != None):
@@ -220,13 +239,18 @@ async def request_delete(ctx: SlashContext, name: str, effect: str):
     if(is_setup == False):
         return await ctx.send(error)
     #Business
-    dao.dao.requestDelete(ctx.guild.id, name, effect)
-    return await ctx.send(f"Request {name} with effect {effect} removed")
+    dao.dao.requestDelete(ctx.guild.id, request_type, name, effect)
+    return await ctx.send(f"{request_type.capitalize()} {name} with effect {effect} removed")
 
 @slash_command(name="request_list",
     description="List all the requests",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS)
-async def request_list(ctx: SlashContext):
+@slash_option(name="request_type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    required=True)
+async def request_list(ctx: SlashContext, request_type: str):
+    request_type = request_type.lower()
     # Check input and fetch from database
     guild_error = check_in_guild(ctx)
     if(guild_error != None):
@@ -235,7 +259,7 @@ async def request_list(ctx: SlashContext):
     if(is_setup == False):
         return await ctx.send(error)
     # Business
-    db_requests = dao.dao.requests(ctx.guild.id, None, None)
+    db_requests = dao.dao.requests(ctx.guild.id, request_type = request_type)
     return await ctx.send(content=requests_content(db_requests))
 
 def check_in_guild(context):
@@ -256,16 +280,10 @@ def guild_card_embed(member, guild, rank):
     embed = Embed(color=PURPLE, title=f"Guild card for {member[2]}", fields=[points, rank, cooldown])
     return embed
 
-#def requests_embed(requests):
-#    fields = []
-#    for request in requests:
-#        fields.append(EmbedField(name=request[1], value=f"**Effect:** {request[2]}, **Value:** {request[3]}"))
-#    return Embed(color=AQUAMARINE, title="Available requests:", fields=fields)
-
-def requests_content(requests):
+def requests_content(db_requests):
     res = "```csv\nName; Effect; Value\n"
-    for request in requests:
-        res = f"{res}{request[1]};{request[2]};{request[3]}\n"
+    for request in db_requests:
+        res = f"{res}{request[2]};{request[3]};{request[4]}\n"
     return f"{res}```"
 
 def get_first_image_attachement(message):
@@ -281,31 +299,31 @@ def ask_info_request_component(options, member_id, message_id, name="Request nam
         placeholder=name,
         min_values=1,
         max_values=1,
-        custom_id=f"request,{variation},{message_id},{member_id}",
+        custom_id=f"{variation},{member_id},{message_id},none",
         ),
     )
     logging.info(res)
     return res
 
-async def send_to_review(ctx, image, name, effect, unique):
+async def send_to_review(ctx, image, request_type, name, effect, unique):
     guild = ctx.guild.id
     member = ctx.user.id
-    db_request = dao.dao.getRequest(guild, name, effect)
-    if(db_request == None or len(db_request) == 0):
-        return f"{name} with effect {effect} doesn't exist. Please select a possible combination."
+    db_request = dao.dao.getRequest(guild, request_type, name, effect)
     db_guild =  dao.dao.getGuild(guild)
     if(len(db_guild) == 0):
         return "Please setup the guild again"
+    if(db_request == None or len(db_request) == 0):
+        return f"{request_type.capitalize()} {name} with effect {effect} doesn't exist. Available requests might have changed"
     await send_review_message(ctx, image, db_guild, db_request, unique)
-    return f"You have fulfilled the request for {name} with effect {effect}, review is in progress"
+    return f"You have submitted a {request_type}: {name} with effect {effect}, review is in progress"
 
 async def send_review_message(ctx, image, db_guild, db_request, unique):
     member = ctx.user.id
     channel = await ctx.guild.fetch_channel(db_guild[4])
     if(channel == None):
         return await ctx.channel.send(f"Error, I cannot see channel <#{db_guild[4]}>, check the setup and bot rights")
-    components = generate_review_component(member, unique, db_request[3])
-    return await channel.send(f"{image}\n<@{member}> submitted {db_request[1]} with effect {db_request[2]} and value {db_request[3]}",components=components, attachements=image)
+    components = generate_review_component(member, unique, db_request[4])
+    return await channel.send(f"{image}\n<@{member}> submitted {db_request[1]} {db_request[2]} with effect {db_request[3]} and value {db_request[4]}",components=components, attachements=image)
 
 def generate_review_component(member, unique, value):
     return [
