@@ -20,6 +20,7 @@ CREATE TABLE members (
 );
 CREATE TABLE requests (
     guild numeric NOT NULL, 
+    request_type text NOT NULL,
     request_name text NOT NULL, 
     effect text NOT NULL,
     value numeric NOT NULL,

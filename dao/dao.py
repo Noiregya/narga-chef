@@ -50,25 +50,25 @@ def getMember(guild_id: int, member_id: int, nickname: str):
         with connection.cursor() as cursor:
             return refreshAndGetMember(cursor, guild_id, member_id, nickname)
 
-def requestRegister(guild_id, name, effect, value):
+def requestRegister(guild_id, request_type, name, effect, value):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
-            return dao.requests.insert(cursor, guild_id, name, effect, value)
+            return dao.requests.insert(cursor, guild_id, request_type, name, effect, value)
 
-def requestDelete(guild_id, name, effect):
+def requestDelete(guild_id, request_type, name, effect):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
-            return dao.requests.delete(cursor, guild_id, name, effect)
+            return dao.requests.delete(cursor, request_type, guild_id, name, effect)
 
-def getRequest(guild_id, name, effect):
+def getRequest(guild_id, request_type, name, effect):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
-            return dao.requests.selectOne(cursor, guild_id, name, effect)
+            return dao.requests.selectOne(cursor, guild_id, request_type, name, effect)
 
-def requests(guild_id, name, effect):
+def requests(guild_id, request_type = None, name = None, effect = None):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
-            return dao.requests.select(cursor, guild_id, name, effect)
+            return dao.requests.select(cursor, guild_id, request_type = request_type, request_name = name, effect = effect)
 
 def add_points(guild_id, member_id, points):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
@@ -76,16 +76,19 @@ def add_points(guild_id, member_id, points):
             return dao.members.add_points(cursor, guild_id, member_id, points)
 
 # Groups every column in lists 
-def requestPerColumn(guid_id, name = None, effect = None):
-    db_res = requests(guid_id, name, effect)
+def requestPerColumn(guid_id, request_type = None, name = None, effect = None):
+    db_res = requests(guid_id, request_type, name, effect)
+    request_type = []
     name = []
     effect = []
     value = []
     for row in db_res:
-        name.append(row[1])
-        effect.append(row[2])
-        value.append(row[3])
+        request_type.append(row[1])
+        name.append(row[2])
+        effect.append(row[3])
+        value.append(row[4])
+    request_type = list(dict.fromkeys(request_type))
     name = list(dict.fromkeys(name))
     effect = list(dict.fromkeys(effect))
     value = list(dict.fromkeys(value))
-    return [name, effect, value]
+    return {"type":request_type, "name": name, "effect": effect, "value": value}
