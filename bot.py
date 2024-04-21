@@ -4,7 +4,8 @@ import datetime
 import calendar
 from interactions import (Client, Intents, 
     listen, slash_command, slash_option, OptionType, SlashContext, 
-    Embed, EmbedField, StringSelectMenu, Button, ButtonStyle, ActionRow, spread_to_rows,
+    Modal, ParagraphText, spread_to_rows,
+    Embed, EmbedField, StringSelectMenu, Button, ButtonStyle, ActionRow, 
     Permissions, Member, ChannelType, BaseChannel, CallbackType)
 from interactions.api.events import MessageCreate, Component
 import logging
@@ -74,16 +75,35 @@ async def on_component(event: Component):
             await notify_member(ctx, request_member, unique, value, fulfilled = True)
             return await ctx.edit_origin(content=f"{image} Request accepted by <@{ctx.member.id}> and {value} points awarded to <@{request_member}>", components=[])
         case ["deny",*_]:
+            custom_id = f"reason,{event_context},{unique},{data1}"
+            modal = getDenialReasonModal()
             value = data1
             request_member = event_context
             image = eventDictionnary.get(f"request,image,{unique},{event_context}")
+            await ctx.send_modal(modal=modal)
+            # Response received
+            modal_ctx: ModalContext = await ctx.bot.wait_for_modal(modal)
+            paragraph = modal_ctx.responses["reason"]
             dao.dao.add_points(ctx.guild.id, request_member, value)
             clear_events(unique, request_member)
-            await notify_member(ctx, request_member, unique, value, fulfilled = False)
-            return await ctx.edit_origin(content=f"{image} Request from <@{request_member}> denied by <@{ctx.member.id}>", components=[])
+            await notify_member(ctx, request_member, unique, value, reason = paragraph, fulfilled = False)
+            await modal_ctx.send(content="Processing", ephemeral=True, delete_after=1.0)
+            return await ctx.message.edit(content=f"{image} Request from <@{request_member}> denied by <@{ctx.member.id}> for reason:\n{paragraph}", components=[])
         case _:
             response = f"Something went wrong, unknown interaction {ctx.custom_id}"
     return await ctx.edit_origin(content=response, components=[])
+
+
+def getDenialReasonModal():
+    return Modal(
+        ParagraphText(
+            label="Reason for denial",
+            custom_id="reason",
+            placeholder="Help the member understand the reason of the denial",
+            max_length=255
+        ),
+        title="Bounty denial",
+    )
 
 def clear_events(unique, member):
     # Delete event from the event dictionnary
@@ -303,14 +323,16 @@ def generate_review_component(member, unique, value):
         )
     ]
 
-async def notify_member(ctx, member, message, points, fulfilled = False):
+async def notify_member(ctx, member, message, points, reason = None, fulfilled = False):
     db_guild = dao.dao.getGuild(ctx.guild.id)
     channel = await ctx.guild.fetch_channel(db_guild[3])
     message = await channel.fetch_message(message)
     if(fulfilled):
         content = f"Congratulations, your request have been accepted by <@{ctx.user.id}> and you have been awarded {points} points"
     else:
-        content = f"<@{ctx.user.id}> denied your request."
+        content = f"<@{ctx.user.id}> denied your request"
+    if(reason != None):
+        content = f"{content} here's why:\n{reason}"
     if(message == None): # The request message can't be fetched
         await channel.send(f"<@{member}> {content}")
     else:
