@@ -29,7 +29,7 @@ def setup(guild_id: int, guild_name: int, currency: str, submission_channel: int
 def refreshAndGetMember(cursor, guild_id, member_id, nickname):
     res = dao.members.select(cursor, guild_id, member_id)
     if(res == None):
-        dao.members.insert(cursor, guild_id, member_id, nickname, 0, datetime.utcnow(), None)
+        dao.members.insert(cursor, guild_id, member_id, nickname, 0, datetime.min, None)
         res = dao.members.select(cursor, guild_id, member_id)
     else: #Update nickname for database maintenability
         dao.members.update(cursor, res[0], res[1], nickname, res[3], res[4], res[5])
@@ -49,6 +49,11 @@ def getMember(guild_id: int, member_id: int, nickname: str):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
         with connection.cursor() as cursor:
             return refreshAndGetMember(cursor, guild_id, member_id, nickname)
+
+def update_member_submission(guild_id: int, member_id: int, last_submission: str):
+    with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
+        with connection.cursor() as cursor:
+            return dao.members.update_submission(cursor, guild_id, member_id, datetime.utcnow(), last_submission)
 
 def requestRegister(guild_id, request_type, name, effect, value):
     with psycopg.connect(f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}") as connection:
