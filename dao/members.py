@@ -15,6 +15,10 @@ def update(cursor, guild_id, member_id, nickname, points, last_submission_time, 
     cursor.execute(f"UPDATE {TABLE_NAME} SET nickname=%s, points=%s, last_submission_time=%s, last_submission=%s WHERE guild=%s AND id=%s",
         [nickname, points, last_submission_time, last_submission, guild_id, member_id])
 
+def update_submission(cursor, guild_id, member_id, last_submission_time, last_submission):
+    cursor.execute(f"UPDATE {TABLE_NAME} SET last_submission_time=%s, last_submission=%s WHERE guild=%s AND id=%s",
+        [last_submission_time, last_submission, guild_id, member_id])
+
 def add_points(cursor, guild_id, member_id, points):
     cursor.execute(f"UPDATE {TABLE_NAME} SET points=points + %s WHERE guild=%s AND id=%s",
         [points, guild_id, member_id])

@@ -1,17 +1,17 @@
 # This example requires the 'message_content' intent.
 import os
-import datetime
 import calendar
+import logging
+import json
+import dao.dao
+from dotenv import load_dotenv
+from datetime import datetime
 from interactions import (Client, Intents, 
     listen, slash_command, slash_option, OptionType, SlashContext, 
     Modal, ParagraphText, spread_to_rows,
     Embed, EmbedField, StringSelectMenu, Button, ButtonStyle, ActionRow, 
     Permissions, Member, ChannelType, BaseChannel, CallbackType)
 from interactions.api.events import MessageCreate, Component
-import logging
-import json
-import dao.dao
-from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.environ.get("token")
@@ -29,16 +29,29 @@ async def on_message_create(ctx: MessageCreate):
     image = get_first_image_attachement(ctx.message)
     if(image != None):
         is_setup, db_guild = check_guild_setup(ctx.message.guild.id)
+        is_right_channel = ctx.message.channel.id == db_guild[3]
         # Check input and fetch from database
         guild_error = check_in_guild(ctx.message)
-        if(guild_error != None or is_setup == False):
+        if(guild_error != None or is_setup == False or is_right_channel == False):
             return
-        if(ctx.message.channel.id == db_guild[3]): #Message is in the submission channel
-            eventDictionnary[f"request,image,{ctx.message.id},{ctx.message.author.id}"] = image.url
-            db_requests = dao.dao.requestPerColumn(ctx.message.guild.id)
-            # if
-            return await ctx.message.reply("Please tell us about your request", 
-                components=ask_info_request_component(db_requests[0], ctx.message.author.id, ctx.message.id, name="Request Name", variation="name"))
+        # Make sure that the member exists and update its nickname in the database
+        db_member = dao.dao.getMember(ctx.message.guild.id, ctx.message.author.id, ctx.message.author.display_name)
+
+        if(db_member[4] != datetime.min): # The user submitted before
+            timestamp_next_request = db_member[4].timestamp() + float(db_guild[7]) * ONE_HOUR
+            timestamp_string = f"<t:{int(timestamp_next_request)}>"
+            if(datetime.utcnow().timestamp() < timestamp_next_request):
+                return await ctx.message.reply(f"You will be able to submit your next request on: <t:{int(timestamp_next_request)}>")
+        eventDictionnary[f"image,{ctx.message.author.id},{ctx.message.id}"] = image.url
+        type_list = dao.dao.requestPerColumn(ctx.message.guild.id)["type"]
+        if(len(type_list)==0):
+            return await ctx.send(f"Please start by registering requests")
+        return await ctx.message.reply("Please tell us about your request", 
+            components=ask_info_request_component(
+                type_list, 
+                ctx.message.author.id, 
+                ctx.message.id, name="Request Type", variation="type")
+            )
 
 @listen(Component)
 async def on_component(event: Component):
@@ -68,12 +81,20 @@ async def on_component(event: Component):
                 response = "Sorry, we lost your image... Please submit your request again"
         case ["accept",*_]:
             value = data1
-            request_member = event_context
-            image = eventDictionnary.get(f"request,image,{unique},{event_context}")
-            dao.dao.add_points(ctx.guild.id, request_member, value)
-            clear_events(unique, request_member)
-            await notify_member(ctx, request_member, unique, value, fulfilled = True)
-            return await ctx.edit_origin(content=f"{image} Request accepted by <@{ctx.member.id}> and {value} points awarded to <@{request_member}>", components=[])
+            image = eventDictionnary.get(f"image,{req_member},{unique}")
+            request_type = eventDictionnary.get(f"type,{req_member},{unique}")
+            name = eventDictionnary.get(f"name,{req_member},{unique}")
+            effect = eventDictionnary.get(f"effect,{req_member},{unique}")
+            # Update member
+            dao.dao.add_points(ctx.guild.id, req_member, value)
+            last_request = "I forgor 💀"
+            if(request_type != None):
+                last_request = f"{request_type.capitalize()} {name} {effect}"
+            dao.dao.update_member_submission(ctx.guild.id, req_member, last_request)
+            clear_events(unique, req_member)
+            # Send messages
+            await notify_member(ctx, req_member, unique, value, fulfilled = True)
+            return await ctx.edit_origin(content=f"{image}\nRequest accepted by <@{ctx.member.id}> and {value} points awarded to <@{req_member}>", components=[])
         case ["deny",*_]:
             custom_id = f"reason,{event_context},{unique},{data1}"
             modal = getDenialReasonModal()
@@ -88,7 +109,7 @@ async def on_component(event: Component):
             clear_events(unique, request_member)
             await notify_member(ctx, request_member, unique, value, reason = paragraph, fulfilled = False)
             await modal_ctx.send(content="Processing", ephemeral=True, delete_after=1.0)
-            return await ctx.message.edit(content=f"{image} Request from <@{request_member}> denied by <@{ctx.member.id}> for reason:\n{paragraph}", components=[])
+            return await ctx.message.edit(content=f"{image}\nRequest from <@{req_member}> denied by <@{ctx.member.id}> for reason:\n{paragraph}", components=[])
         case _:
             response = f"Something went wrong, unknown interaction {ctx.custom_id}"
     return await ctx.edit_origin(content=response, components=[])
@@ -248,12 +269,16 @@ def check_guild_setup(guild_id):
         return [False, "Please register this server by using the /setup command"]
     return [True, db_guild]
 
-def guild_card_embed(member, guild, rank):
-    points = EmbedField(name=guild[2], value=str(member[3]), inline=True)
+def guild_card_embed(db_member, db_guild, rank):
+    points = EmbedField(name=db_guild[2], value=str(db_member[3]), inline=True)
     rank = EmbedField(name="Rank", value=str(rank[2]), inline=True)
-    target_time = member[4].timestamp() + float(guild[7]) * ONE_HOUR
-    cooldown = EmbedField(name="Cooldown", value=f"<t:{int(target_time)}:R>", inline=True)
-    embed = Embed(color=PURPLE, title=f"Guild card for {member[2]}", fields=[points, rank, cooldown])
+    if(db_member[4] == datetime.min):
+        timestamp_string = "No submission yet"
+    else:
+        timestamp_next_request = db_member[4].timestamp() + float(db_guild[7]) * ONE_HOUR
+        timestamp_string = f"<t:{int(timestamp_next_request)}>"
+    cooldown = EmbedField(name="Cooldown", value=timestamp_string, inline=True)
+    embed = Embed(color=PURPLE, title=f"Guild card for {db_member[2]}", fields=[points, rank, cooldown])
     return embed
 
 #def requests_embed(requests):
