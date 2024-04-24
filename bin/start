@@ -1,1 +1,1 @@
-PYTHONUNBUFFERED=TRUE python server.py
+PYTHONUNBUFFERED=TRUE python bot.py

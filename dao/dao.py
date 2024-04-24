@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import psycopg
 import dao.guilds
 import dao.members
-import dao.requests
+import dao.requests as requests
 
 load_dotenv()
 
@@ -96,7 +96,7 @@ def request_register(guild_id, request_type, name, effect, value):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.requests.insert(
+            return requests.insert(
                 cursor, guild_id, request_type, name, effect, value
             )
 
@@ -106,7 +106,7 @@ def request_delete(guild_id, request_type, name, effect):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.requests.delete(cursor, guild_id, request_type, name, effect)
+            return requests.delete(cursor, guild_id, request_type, name, effect)
 
 
 def get_request(guild_id, request_type, name, effect):
@@ -114,15 +114,15 @@ def get_request(guild_id, request_type, name, effect):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.requests.selectOne(cursor, guild_id, request_type, name, effect)
+            return requests.selectOne(cursor, guild_id, request_type, name, effect)
 
 
-def requests(guild_id, request_type=None, name=None, effect=None):
+def get_requests(guild_id, request_type=None, name=None, effect=None):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.requests.select(
+            return requests.select(
                 cursor,
                 guild_id,
                 request_type=request_type,
@@ -165,16 +165,16 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
 
 def request_per_column(guid_id, request_type=None, name=None, effect=None):
     """Groups every column in lists"""
-    db_requests = requests(guid_id, request_type, name, effect)
+    db_requests = get_requests(guid_id, request_type, name, effect)
     request_type = []
     name = []
     effect = []
     value = []
     for request in db_requests:
-        request_type.append(request[dao.requests.REQUEST_TYPE])
-        name.append(request[dao.requests.REQUEST_NAME])
-        effect.append(request[dao.requests.EFFECT])
-        value.append(request[dao.requests.VALUE])
+        request_type.append(request[requests.REQUEST_TYPE])
+        name.append(request[requests.REQUEST_NAME])
+        effect.append(request[requests.EFFECT])
+        value.append(request[requests.VALUE])
     request_type = list(dict.fromkeys(request_type))
     name = list(dict.fromkeys(name))
     effect = list(dict.fromkeys(effect))
