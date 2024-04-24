@@ -1,10 +1,11 @@
+"""Members table"""
 TABLE_NAME = "members"
-# 0 - guild
-# 1 - id
-# 2 - nickname
-# 3 - points
-# 4 - last_submission_time
-# 5 - last_submission
+GUILD = 0
+ID = 1
+NICKNAME = 2
+POINTS = 3
+LAST_SUBMISION_TIME = 4
+LAST_SUBMISSION = 5
 
 # The nickname column is only used for looking at the database directly, it will never be used in the business
 def insert(cursor, guild_id, member_id, nickname, points, last_submission_time, last_submission):

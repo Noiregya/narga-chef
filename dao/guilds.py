@@ -1,13 +1,13 @@
+"""Guilds table"""
 TABLE_NAME = "guilds"
-
-# - 0 id
-# - 1 guild_name
-# - 2 currency
-# - 3 submission_channel
-# - 4 review_channel
-# - 5 info_channel
-# - 6 leaderboard
-# - 7 cooldown
+ID = 0
+GUILD_NAME = 1
+CURRENCY = 2
+SUBMISSION_CHANNEL = 3
+REVIEW_CHANNEL = 4
+INFO_CHANNEL = 5
+LEADERBOARD = 6
+COOLDOWN = 7
 
 def insert(cursor, guild_id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown):
     cursor.execute(f"INSERT INTO {TABLE_NAME} (id, guild_name, currency, submission_channel, review_channel, info_channel, leaderboard, cooldown) values(%s, %s, %s, %s, %s, %s, %s, %s)",

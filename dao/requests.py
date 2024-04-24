@@ -1,9 +1,10 @@
+"""Requests table"""
 TABLE_NAME = "requests"
-# 0 - guild
-# 1 - request_type
-# 2 - request_name
-# 3 - effect
-# 4 - value
+GUILD = 0
+REQUEST_TYPE = 1
+REQUEST_NAME = 2
+EFFECT = 3
+VALUE = 4
 
 # The nickname column is only used for looking at the database directly, it will never be used in the business
 def insert(cursor, guild, request_type, request_name, effect, value):
