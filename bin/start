@@ -1,1 +1,2 @@
-PYTHONUNBUFFERED=TRUE python bot.py
+./narga/bin/activate
+PYTHONUNBUFFERED=TRUE ./narga/bin/python bot.py

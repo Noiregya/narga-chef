@@ -5,8 +5,11 @@ dao/__pycache__
 run.sh
 bin/*
 lib/*
+lib64
 lib64/*
 logs/*
 out.logs
 pyvenv.cfg
 update
+__pycache__/*
+

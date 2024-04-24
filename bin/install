@@ -1,4 +1,4 @@
-VENV_NAME=discord
+VENV_NAME=narga
 
 python -m venv "${VENV_NAME}"
 source "${VENV_NAME}/bin/activate"
