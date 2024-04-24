@@ -33,3 +33,7 @@ CREATE TABLE options (
     remuneration numeric NOT NULL,
     PRIMARY KEY(guild, request_name, option_name)
 );
+CREATE TABLE metanarga (
+    data_model_version text NOT NULL
+);
+INSERT INTO metanarga (data_model_version) VALUES ('1.0.0');
