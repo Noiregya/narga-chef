@@ -86,9 +86,12 @@ async def effect_component(ctx, effect, req_member, unique):
     image = eventDictionnary.get(f"image,{req_member},{unique}")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
     if image is not None and request_type is not None:
-        effect = ctx.values[0]
         name = eventDictionnary.get(f"name,{req_member},{unique}")
-        return await send_to_review(ctx, image, request_type, name, effect, unique)
+        content = await send_to_review(ctx, image, request_type, name, effect, unique)
+        return await ctx.edit_origin(
+            content=content,
+            components=[],
+        )
     else:
         return "Sorry, we lost track of your request... Please submit again"
 
