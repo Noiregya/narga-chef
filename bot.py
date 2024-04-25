@@ -203,7 +203,7 @@ async def request_register(
     ctx: SlashContext, request_type: str, name: str, effect: str, value: str
 ):
     """Request register command have been received"""
-    request_type = request_type.lower()
+    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -212,10 +212,10 @@ async def request_register(
     if not is_setup:
         return await ctx.send(error)
     dao.request_register(
-        ctx.guild.id, request_type.lower(), name.lower(), effect.lower(), value
+        ctx.guild.id, request_type, name, effect, value
     )
     return await ctx.send(
-        f"{request_type.capitalize()} {name} with effect {effect} and value {value} added"
+        f"{request_type} {name} with effect {effect} and value {value} added"
     )
 
 
@@ -244,7 +244,7 @@ async def request_register(
 )
 async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
     """Request delete command have been received"""
-    request_type = request_type.lower()
+    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -255,7 +255,7 @@ async def request_delete(ctx: SlashContext, request_type: str, name: str, effect
     # Business
     dao.request_delete(ctx.guild.id, request_type, name, effect)
     return await ctx.send(
-        f"{request_type.capitalize()} {name} with effect {effect} removed"
+        f"{request_type} {name} with effect {effect} removed"
     )
 
 
@@ -272,7 +272,7 @@ async def request_delete(ctx: SlashContext, request_type: str, name: str, effect
 )
 async def request_list(ctx: SlashContext, request_type: str):
     """Request list command have been received"""
-    request_type = request_type.lower()
+    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
