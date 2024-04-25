@@ -86,9 +86,12 @@ async def effect_component(ctx, effect, req_member, unique):
     image = eventDictionnary.get(f"image,{req_member},{unique}")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
     if image is not None and request_type is not None:
-        effect = ctx.values[0]
         name = eventDictionnary.get(f"name,{req_member},{unique}")
-        return await send_to_review(ctx, image, request_type, name, effect, unique)
+        content = await send_to_review(ctx, image, request_type, name, effect, unique)
+        return await ctx.edit_origin(
+            content=content,
+            components=[],
+        )
     else:
         return "Sorry, we lost track of your request... Please submit again"
 
@@ -103,7 +106,7 @@ async def accept_component(ctx, req_member, unique, value):
     dao.add_points(ctx.guild.id, req_member, value)
     last_request = "I forgor 💀"
     if request_type is not None:
-        last_request = f"{request_type.capitalize()} {name} {effect}"
+        last_request = f"{request_type} {name} {effect}"
     dao.update_member_submission(ctx.guild.id, req_member, last_request)
     clear_events(unique, req_member)
     # Send messages
@@ -149,7 +152,7 @@ async def send_to_review(ctx, image, request_type, name, effect, unique):
         return "Please setup the guild again"
     if db_request is None or len(db_request) == 0:
         return (
-            f"{request_type.capitalize()} {name} with effect {effect} doesn't exist."
+            f"{request_type} {name} with effect {effect} doesn't exist."
             " Available requests might have changed"
         )
     await send_review_message(ctx, image, db_guild, db_request, unique)
