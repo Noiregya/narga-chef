@@ -90,18 +90,21 @@ async def on_component(event: Component):
     name="submission_channel",
     description="Channel you want members to submit to",
     opt_type=OptionType.CHANNEL,
+    channel_types=[ChannelType.GUILD_TEXT],
     required=True,
 )
 @slash_option(
     name="review_channel",
     description="Channel you want moderators to review submissions in",
     opt_type=OptionType.CHANNEL,
+    channel_types=[ChannelType.GUILD_TEXT],
     required=True,
 )
 @slash_option(
     name="info_channel",
     description="Channel you want the leaderboard to be displayed in",
     opt_type=OptionType.CHANNEL,
+    channel_types=[ChannelType.GUILD_TEXT],
     required=True,
 )
 async def setup(
@@ -211,13 +214,16 @@ async def request_register(
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    dao.request_register(
-        ctx.guild.id, request_type, name, effect, value
-    )
+    try:
+        dao.request_register(
+            ctx.guild.id, request_type, name, effect, value
+        )
+    except Exception:
+        return await ctx.send(f"Could not add {request_type} {name} with effect {effect}"
+            " please check that it doesn't already exists")
     return await ctx.send(
         f"{request_type} {name} with effect {effect} and value {value} added"
     )
-
 
 @slash_command(
     name="request_delete",
@@ -284,5 +290,62 @@ async def request_list(ctx: SlashContext, request_type: str):
     db_requests = dao.get_requests(ctx.guild.id, request_type=request_type)
     return await ctx.send(content=tools.requests_content(db_requests))
 
+@slash_command(
+    name="points_add",
+    description="Add points to a certain user",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member whose point are going to be changed",
+    opt_type=OptionType.USER,
+    required=True,
+)
+@slash_option(
+    name="points",
+    description="Amount of points to award",
+    opt_type=OptionType.INTEGER,
+    required=True,
+)
+async def points_add(ctx:SlashContext, member: Member, points:int):
+    """Command to add point to the member"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    dao.get_member(member.guild.id, member.id, member.display_name)
+    dao.add_points(member.guild.id, member.id, points)
+    return await ctx.send(f"Points added for {member.display_name}")
+
+@slash_command(
+    name="points_sub",
+    description="Add points to a certain user",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member whose point are going to be changed",
+    opt_type=OptionType.USER,
+    required=True,
+)
+@slash_option(
+    name="points",
+    description="Amount of points to take away",
+    opt_type=OptionType.INTEGER,
+    required=True,
+)
+async def points_sub(ctx:SlashContext, member: Member, points:int):
+    """Command to subtract point to the member"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    dao.get_member(member.guild.id, member.id, member.display_name)
+    dao.add_points(member.guild.id, member.id, -points)
+    return await ctx.send(f"Points subtracted for {member.display_name}")
 
 bot.start(TOKEN)
