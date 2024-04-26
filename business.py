@@ -27,7 +27,7 @@ async def image_received(ctx, image):
     # Make sure that the member exists and update its nickname in the database
     db_member = dao.get_member(guild.id, author.id, author.display_name)
     if (
-        db_member[members.LAST_SUBMISION_TIME] != datetime.min
+        db_member[members.LAST_SUBMISION_TIME].year != datetime.min.year
     ):  # The user submitted before
         timestamp_next_request = (
             db_member[members.LAST_SUBMISION_TIME].timestamp()
