@@ -73,7 +73,7 @@ def get_rank(guild_id: int, member_id: int):
             return dao.members.rank(cursor, guild_id, member_id)
 
 
-def get_member(guild_id: int, member_id: int, nickname: str):
+def get_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
@@ -81,15 +81,21 @@ def get_member(guild_id: int, member_id: int, nickname: str):
             return refresh_and_get_member(cursor, guild_id, member_id, nickname)
 
 
-def update_member_submission(guild_id: int, member_id: int, last_submission: str):
+def update_member_submission(guild_id: int, member_id: int, next_submission_time: datetime,last_submission: str):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
             return dao.members.update_submission(
-                cursor, guild_id, member_id, datetime.utcnow(), last_submission
+                cursor, guild_id, member_id, next_submission_time, last_submission
             )
 
+def cooldown_reset(guild_id: int, member_id: int):
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return dao.members.reset_cooldown(cursor, guild_id, member_id)
 
 def request_register(guild_id, request_type, name, effect, value):
     with psycopg.connect(
@@ -157,8 +163,8 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
             db_member[dao.members.ID],
             nickname,
             db_member[dao.members.POINTS],
-            db_member[dao.members.LAST_SUBMISION_TIME],
-            db_member[dao.members.LAST_SUBMISION_TIME],
+            db_member[dao.members.NEXT_SUBMISSION_TIME],
+            db_member[dao.members.LAST_SUBMISSION],
         )
     return db_member
 

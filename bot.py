@@ -32,9 +32,9 @@ bot = Client(intents=intents)
 @listen()
 async def on_message_create(ctx: MessageCreate):
     """When the discord bot sees a message"""
-    image = tools.get_first_image_attachement(ctx.message)
-    if image is not None:
-        return await business.image_received(ctx, image)
+    images = tools.get_image_attachements(ctx.message)
+    if len(images) > 0:
+        return await business.image_received(ctx, images)
 
 
 @listen(Component)
@@ -172,11 +172,40 @@ async def card(ctx: SlashContext, member: Member = None):
         embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
     )
 
+@slash_command(
+    name="cooldown_reset",
+    description="Reset a member's cooldown",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member to reset the cooldown of",
+    opt_type=OptionType.USER,
+    required=True,
+)
+async def cooldown_reset(ctx: SlashContext, member: Member = None):
+    """Cooldown_reset command have been received"""
+    # Check input
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(
+            db_guild
+        )  # db_guild is a polymorph, either guild or error message
+    if member is None:
+        member = ctx.member
+    dao.cooldown_reset(ctx.guild.id, member.id)
+    return await ctx.send(
+        f"Request cooldown for <@{member.id}> have been reset."
+    )
+
 
 @slash_command(
     name="request_register",
     description="Register a request and set its value",
-    default_member_permissions=Permissions.ADMINISTRATOR,
+    default_member_permissions=Permissions.MANAGE_GUILD,
 )
 @slash_option(
     name="request_type",
@@ -228,7 +257,7 @@ async def request_register(
 @slash_command(
     name="request_delete",
     description="Delete a request",
-    default_member_permissions=Permissions.ADMINISTRATOR,
+    default_member_permissions=Permissions.MANAGE_GUILD,
 )
 @slash_option(
     name="request_type",

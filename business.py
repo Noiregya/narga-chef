@@ -14,10 +14,14 @@ eventDictionnary = {}
 
 
 # Business
-async def image_received(ctx, image):
+async def image_received(ctx, images):
     """A message with an image has been received"""
     guild = ctx.message.guild
     author = ctx.message.author
+    user_ids = [author.id]
+    async for user in ctx.message.mention_users:
+        if user.id is not author.id:
+            user_ids.append(user.id)
     is_setup, db_guild = tools.check_guild_setup(guild.id)
     is_right_channel = ctx.message.channel.id == db_guild[guilds.SUBMISSION_CHANNEL]
     # Check input and fetch from database
@@ -27,18 +31,17 @@ async def image_received(ctx, image):
     # Make sure that the member exists and update its nickname in the database
     db_member = dao.get_member(guild.id, author.id, author.display_name)
     if (
-        db_member[members.LAST_SUBMISION_TIME].year != datetime.min.year
+        db_member[members.NEXT_SUBMISSION_TIME].year != datetime.min.year
     ):  # The user submitted before
-        timestamp_next_request = (
-            db_member[members.LAST_SUBMISION_TIME].timestamp()
-            + float(db_guild[7]) * ONE_HOUR
-        )
-        if datetime.utcnow().timestamp() < timestamp_next_request:
+        timestamp_next_request = db_member[members.NEXT_SUBMISSION_TIME].timestamp()
+        if datetime.now().timestamp() < timestamp_next_request:
             return await ctx.message.reply(
                 "You will be able to submit your next request on:"
                 f"<t:{int(timestamp_next_request)}>"
             )
-    eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image.url
+    image_string = ";".join(images)
+    eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image_string
+    eventDictionnary[f"users,{author.id},{ctx.message.id}"] = user_ids
     type_list = dao.request_per_column(guild.id)["type"]
     if len(type_list) == 0:
         return await ctx.send("Please start by registering requests for this guild")
@@ -83,11 +86,12 @@ async def name_component(ctx, name, event_type, req_member, unique):
 
 async def effect_component(ctx, effect, req_member, unique):
     """A component indicating the effect of request that have been received"""
-    image = eventDictionnary.get(f"image,{req_member},{unique}")
+    image_string = eventDictionnary.get(f"image,{req_member},{unique}")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
-    if image is not None and request_type is not None:
+    if image_string is not None and request_type is not None:
         name = eventDictionnary.get(f"name,{req_member},{unique}")
-        content = await send_to_review(ctx, image, request_type, name, effect, unique)
+        images = image_string.split(";")
+        content = await send_to_review(ctx, images, request_type, name, effect, unique)
         return await ctx.edit_origin(
             content=content,
             components=[],
@@ -98,52 +102,70 @@ async def effect_component(ctx, effect, req_member, unique):
 
 async def accept_component(ctx, req_member, unique, value):
     """A component received when a user clicks the accept button"""
-    image = eventDictionnary.get(f"image,{req_member},{unique}")
+    db_guild = dao.get_guild(ctx.guild.id)
+    image_string = eventDictionnary.get(f"image,{req_member},{unique}")
+    if image_string is None:
+        return await ctx.edit_origin(
+            content=(f"This request expired, please ask <@{req_member}> to submit it again"),
+            components=[])
+    image_string = image_string.replace(";","\n")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
     name = eventDictionnary.get(f"name,{req_member},{unique}")
     effect = eventDictionnary.get(f"effect,{req_member},{unique}")
-    # Update member
-    dao.add_points(ctx.guild.id, req_member, value)
+    users = eventDictionnary.get(f"users,{req_member},{unique}")
     last_request = "I forgor 💀"
     if request_type is not None:
         last_request = f"{request_type} {name} {effect}"
-    dao.update_member_submission(ctx.guild.id, req_member, last_request)
+    # Update member
+    member_pings = ""
+    for user in users:
+        db_member = dao.get_member(ctx.guild.id, user)
+        dao.add_points(ctx.guild.id, user, value)
+        next_request_time = tools.calculate_next_submission_time(
+            db_member[members.NEXT_SUBMISSION_TIME],
+            db_guild[guilds.COOLDOWN])
+        dao.update_member_submission(ctx.guild.id, user, next_request_time, last_request)
+        # Send messages
+        member_pings = member_pings + f"<@{user}> "
+    await notify_member(ctx, member_pings, unique, value, fulfilled=True)
     clear_events(unique, req_member)
-    # Send messages
-    await notify_member(ctx, req_member, unique, value, fulfilled=True)
     return await ctx.edit_origin(
         content=(
-            f"{image}\nRequest accepted by <@{ctx.member.id}> and"
-            f" {value} points awarded to <@{req_member}>"
+            f"Request accepted by <@{ctx.member.id}> and"
+            f" {value} points awarded to {member_pings}\n{image_string}"
         ),
         components=[],
     )
 
-
 async def deny_component(ctx, req_member, unique, value):
     """A component received when a user clicks the deny button"""
     modal = tools.get_denial_reason_modal()
-    image = eventDictionnary.get(f"image,{req_member},{unique}")
+    image_string = eventDictionnary.get(f"image,{req_member},{unique}")
     await ctx.send_modal(modal=modal)
+    if image_string is None:
+        return await ctx.edit_origin(
+            content=(f"This request expired, please ask <@{req_member}> to submit it again"),
+            components=[])
+    image_string = image_string.replace(";","\n")
     # Response received
     modal_ctx = await ctx.bot.wait_for_modal(modal)
     paragraph = modal_ctx.responses["reason"]
     dao.add_points(ctx.guild.id, req_member, value)
     clear_events(unique, req_member)
     await notify_member(
-        ctx, req_member, unique, value, reason=paragraph, fulfilled=False
+        ctx, f"<@{req_member}>", unique, value, reason=paragraph, fulfilled=False
     )
     await modal_ctx.send(content="Processing", ephemeral=True, delete_after=1.0)
     return await ctx.message.edit(
         content=(
-            f"{image}\nRequest from <@{req_member}> denied by <@{ctx.member.id}>"
-            f" for reason:\n{paragraph}"
+            f"Request from <@{req_member}> denied by <@{ctx.member.id}>"
+            f" for reason:\n{paragraph}\n{image_string}"
         ),
         components=[],
     )
 
 
-async def send_to_review(ctx, image, request_type, name, effect, unique):
+async def send_to_review(ctx, images, request_type, name, effect, unique):
     """Send a request to be reviewed"""
     guild = ctx.guild.id
     db_request = dao.get_request(guild, request_type, name, effect)
@@ -155,14 +177,14 @@ async def send_to_review(ctx, image, request_type, name, effect, unique):
             f"{request_type} {name} with effect {effect} doesn't exist."
             " Available requests might have changed"
         )
-    await send_review_message(ctx, image, db_guild, db_request, unique)
+    await send_review_message(ctx, images, db_guild, db_request, unique)
     return (
         f"You have submitted a {request_type}: {name} with effect {effect},"
         " review is in progress"
     )
 
 
-async def send_review_message(ctx, image, db_guild, db_request, unique):
+async def send_review_message(ctx, images, db_guild, db_request, unique):
     """Send the message in the review channel"""
     member = ctx.user.id
     channel = await ctx.guild.fetch_channel(db_guild[guilds.REVIEW_CHANNEL])
@@ -176,19 +198,20 @@ async def send_review_message(ctx, image, db_guild, db_request, unique):
     components = tools.generate_review_component(
         member, unique, db_request[requests.VALUE]
     )
+    images = "\n".join(images)
     return await channel.send(
-        f"{image}\n<@{member}> submitted"
+        f"<@{member}> submitted"
         f" {db_request[requests.REQUEST_TYPE]}"
         f" {db_request[requests.REQUEST_NAME]} with effect"
         f" {db_request[requests.EFFECT]} and value"
-        f" {db_request[requests.VALUE]}",
+        f" {db_request[requests.VALUE]}\n" +
+        images,
         components=components,
-        attachements=image,
     )
 
 
-async def notify_member(ctx, member, message, points, reason=None, fulfilled=False):
-    """Notify a member of the result of their request"""
+async def notify_member(ctx, members, message, points, reason=None, fulfilled=False):
+    """Notify members of the result of their request"""
     db_guild = dao.get_guild(ctx.guild.id)
     channel = await ctx.guild.fetch_channel(db_guild[guilds.SUBMISSION_CHANNEL])
     message = await channel.fetch_message(message)
@@ -201,10 +224,7 @@ async def notify_member(ctx, member, message, points, reason=None, fulfilled=Fal
         content = f"<@{ctx.user.id}> denied your request"
     if reason is not None:
         content = f"{content} here's why:\n{reason}"
-    if message is None:  # The request message can't be fetched
-        await channel.send(f"<@{member}> {content}")
-    else:
-        await message.reply(content)
+    await message.reply(f"{members}{content}")
 
 
 def clear_events(unique, member):
