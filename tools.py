@@ -13,6 +13,7 @@ from interactions import (
     Button,
     ButtonStyle,
     ActionRow,
+    Attachment,
 )
 import dao.dao as dao
 import dao.members as members
@@ -59,13 +60,10 @@ def generate_guild_card_embed(db_member, db_guild, rank):
         inline=True,
     )
     rank = EmbedField(name="Rank", value=str(rank[2]), inline=True)
-    if db_member[members.LAST_SUBMISION_TIME].year is datetime.min.year:
+    if db_member[members.NEXT_SUBMISSION_TIME].year is datetime.min.year:
         timestamp_string = "No submission yet"
     else:
-        timestamp_next_request = (
-            db_member[members.LAST_SUBMISION_TIME].timestamp()
-            + float(db_guild[guilds.COOLDOWN]) * ONE_HOUR
-        )
+        timestamp_next_request = db_member[members.NEXT_SUBMISSION_TIME].timestamp()
         timestamp_string = f"<t:{int(timestamp_next_request)}>"
     cooldown = EmbedField(name="Cooldown", value=timestamp_string, inline=True)
     embed = Embed(
@@ -90,13 +88,13 @@ def requests_content(db_requests):
     return f"{res}```"
 
 
-def get_first_image_attachement(message):
-    """Gets the first image attached to a message"""
+def get_image_attachements(message):
+    """Gets the images url attached to a message"""
+    images = []
     for attachement in message.attachments:
         if attachement.content_type.startswith("image"):
-            return attachement
-    return None
-
+            images.append(attachement.url)
+    return images
 
 def generate_request_component(
     options, member_id, message_id, name="Request name", variation="name"
@@ -131,3 +129,12 @@ def generate_review_component(member, unique, value):
             ),
         )
     ]
+
+
+def calculate_next_submission_time(previous_next, cooldown):
+    """Gives the datetime of the next allowed submission"""
+    if previous_next < datetime.now():
+        previous_next = datetime.now()
+    return datetime.fromtimestamp(
+        previous_next.timestamp() + ONE_HOUR * float(cooldown)
+    )
