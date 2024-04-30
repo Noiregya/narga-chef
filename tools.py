@@ -13,7 +13,6 @@ from interactions import (
     Button,
     ButtonStyle,
     ActionRow,
-    Attachment,
 )
 import dao.dao as dao
 import dao.members as members

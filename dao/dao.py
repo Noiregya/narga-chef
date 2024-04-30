@@ -186,3 +186,26 @@ def request_per_column(guid_id, request_type=None, name=None, effect=None):
     effect = list(dict.fromkeys(effect))
     value = list(dict.fromkeys(value))
     return {"type": request_type, "name": name, "effect": effect, "value": value}
+
+
+def ordered_requests(guid_id, request_type=None, name=None, effect=None): # TODO: I forgot what i was writing this for
+    """Groups every column in a 3-dimensional dictionnary"""
+    db_requests = get_requests(guid_id, request_type, name, effect)
+    all = {}
+    for request in db_requests:
+        type_dict = all.get(request[requests.REQUEST_TYPE])
+        if type_dict is None:
+            all[request[requests.REQUEST_TYPE]] = {request[requests.REQUEST_NAME]:\
+                    {request[requests.EFFECT]:request[requests.VALUE]}
+                }
+            continue
+        name_dict = type_dict.get(request[requests.REQUEST_NAME])
+        if name_dict is None:
+            type_dict[request[requests.REQUEST_NAME]]=\
+                {request[requests.EFFECT]: request[requests.VALUE]}
+            continue
+        effect_dict = name_dict.get(request[requests.EFFECT])
+        if effect_dict is None:
+            name_dict[request[requests.EFFECT]] = request[requests.VALUE]
+            continue
+    return all

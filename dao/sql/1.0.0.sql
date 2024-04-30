@@ -24,7 +24,7 @@ CREATE TABLE requests (
     request_name text NOT NULL, 
     effect text NOT NULL,
     value numeric NOT NULL,
-    PRIMARY KEY(guild, request_name, effect)
+    PRIMARY KEY(guild, request_type, request_name, effect)
 );
 CREATE TABLE options (
     guild numeric NOT NULL, 

@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+import psycopg
 import dao.dao as dao
 import dao.members as members
 import dao.guilds as guilds
@@ -9,6 +10,7 @@ import dao.requests as requests
 import tools
 
 ONE_HOUR = 3600
+MAX_OPTIONS = 25
 
 eventDictionnary = {}
 
@@ -210,7 +212,7 @@ async def send_review_message(ctx, images, db_guild, db_request, unique):
     )
 
 
-async def notify_member(ctx, members, message, points, reason=None, fulfilled=False):
+async def notify_member(ctx, member_pings, message, points, reason=None, fulfilled=False):
     """Notify members of the result of their request"""
     db_guild = dao.get_guild(ctx.guild.id)
     channel = await ctx.guild.fetch_channel(db_guild[guilds.SUBMISSION_CHANNEL])
@@ -224,7 +226,7 @@ async def notify_member(ctx, members, message, points, reason=None, fulfilled=Fa
         content = f"<@{ctx.user.id}> denied your request"
     if reason is not None:
         content = f"{content} here's why:\n{reason}"
-    await message.reply(f"{members}{content}")
+    return await message.reply(f"{member_pings}{content}")
 
 
 def clear_events(unique, member):
@@ -235,3 +237,31 @@ def clear_events(unique, member):
         del eventDictionnary[f"image,{unique},{member}"]
     except KeyError:
         logging.info("Unable to delete event from the dictionnary")
+
+async def add_request(ctx, req_type, name, effect, value):
+    """Add a new request to the database"""
+    req = dao.ordered_requests(ctx.guild.id)
+    if req is not None:
+        if len(req) >= MAX_OPTIONS:
+            return await ctx.send("Could not add the request, there can only be a maximum of"
+                f" {MAX_OPTIONS} types")
+        gotten_type = req.get(req_type)
+        if gotten_type is not None:
+            if len(gotten_type) >= MAX_OPTIONS:
+                return await ctx.send(f"Could not add the request, there can only be a maximum of"
+                    f" {MAX_OPTIONS} names in {req_type}")
+            gotten_effect = req.get(req_type).get(name)
+            if gotten_effect is not None and len(gotten_effect) >= MAX_OPTIONS:
+                return await ctx.send(f"Could not add the request, there can only be a maximum of"
+                    f" {MAX_OPTIONS} effects for {name}")
+    try:
+        dao.request_register(
+            ctx.guild.id, req_type, name, effect, value
+        )
+    except psycopg.Error as e:
+        logging.error(e)
+        return await ctx.send(f"Could not add {req_type} {name} with effect {effect}"
+            " please check that it doesn't already exists")
+    return await ctx.send(
+        f"{req_type} {name} with effect {effect} and value {value} added"
+    )

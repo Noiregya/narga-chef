@@ -203,7 +203,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
 
 
 @slash_command(
-    name="request_register",
+    name="request_add",
     description="Register a request and set its value",
     default_member_permissions=Permissions.MANAGE_GUILD,
 )
@@ -231,11 +231,10 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     opt_type=OptionType.INTEGER,
     required=True,
 )
-async def request_register(
+async def request_add(
     ctx: SlashContext, request_type: str, name: str, effect: str, value: str
 ):
     """Request register command have been received"""
-    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -243,16 +242,7 @@ async def request_register(
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    try:
-        dao.request_register(
-            ctx.guild.id, request_type, name, effect, value
-        )
-    except Exception:
-        return await ctx.send(f"Could not add {request_type} {name} with effect {effect}"
-            " please check that it doesn't already exists")
-    return await ctx.send(
-        f"{request_type} {name} with effect {effect} and value {value} added"
-    )
+    return await business.add_request(ctx, request_type, name, effect, value)
 
 @slash_command(
     name="request_delete",
@@ -279,7 +269,6 @@ async def request_register(
 )
 async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
     """Request delete command have been received"""
-    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -307,7 +296,6 @@ async def request_delete(ctx: SlashContext, request_type: str, name: str, effect
 )
 async def request_list(ctx: SlashContext, request_type: str):
     """Request list command have been received"""
-    request_type = request_type
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
