@@ -95,11 +95,12 @@ def get_image_attachements(message):
             images.append(attachement.url)
     return images
 
+
 def generate_request_component(
     options, member_id, message_id, name="Request name", variation="name"
 ):
     """Generates a selector for users to pick an option"""
-    res: list[ActionRow] = spread_to_rows(  # TODO: check size limit
+    res: list[ActionRow] = spread_to_rows(
         StringSelectMenu(
             options,
             placeholder=name,
@@ -137,3 +138,48 @@ def calculate_next_submission_time(previous_next, cooldown):
     return datetime.fromtimestamp(
         previous_next.timestamp() + ONE_HOUR * float(cooldown)
     )
+
+
+def request_per_column(guid_id, request_type=None, name=None, effect=None):
+    """Groups every column in lists"""
+    db_requests = dao.get_requests(guid_id, request_type, name, effect)
+    request_type = []
+    name = []
+    effect = []
+    value = []
+    for request in db_requests:
+        request_type.append(request[requests.REQUEST_TYPE])
+        name.append(request[requests.REQUEST_NAME])
+        effect.append(request[requests.EFFECT])
+        value.append(request[requests.VALUE])
+    request_type = list(dict.fromkeys(request_type))
+    name = list(dict.fromkeys(name))
+    effect = list(dict.fromkeys(effect))
+    value = list(dict.fromkeys(value))
+    return {"type": request_type, "name": name, "effect": effect, "value": value}
+
+
+def ordered_requests(guid_id, request_type=None, name=None, effect=None):
+    """Groups every column in a 3-dimensional dictionnary"""
+    db_requests = dao.get_requests(guid_id, request_type, name, effect)
+    all_req = {}
+    for request in db_requests:
+        type_dict = all_req.get(request[requests.REQUEST_TYPE])
+        if type_dict is None:
+            all_req[request[requests.REQUEST_TYPE]] = {
+                request[requests.REQUEST_NAME]: {
+                    request[requests.EFFECT]: request[requests.VALUE]
+                }
+            }
+            continue
+        name_dict = type_dict.get(request[requests.REQUEST_NAME])
+        if name_dict is None:
+            type_dict[request[requests.REQUEST_NAME]] = {
+                request[requests.EFFECT]: request[requests.VALUE]
+            }
+            continue
+        effect_dict = name_dict.get(request[requests.EFFECT])
+        if effect_dict is None:
+            name_dict[request[requests.EFFECT]] = request[requests.VALUE]
+            continue
+    return all_req

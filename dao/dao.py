@@ -1,12 +1,15 @@
 """Entry point for database requests"""
 
+# pylint: disable=E1129
+
 import os
 from datetime import datetime
 from dotenv import load_dotenv
 import psycopg
-import dao.guilds
-import dao.members
+import dao.guilds as guilds
+import dao.members as members
 import dao.requests as requests
+import dao.rewards as rewards
 
 load_dotenv()
 
@@ -33,7 +36,7 @@ def setup(
     ) as connection:
         with connection.cursor() as cursor:
             if guild_exists(cursor, guild_id):
-                return dao.guilds.update(
+                return guilds.update(
                     cursor,
                     guild_id,
                     guild_name,
@@ -44,7 +47,7 @@ def setup(
                     cooldown,
                 )
             else:
-                return dao.guilds.insert(
+                return guilds.insert(
                     cursor,
                     guild_id,
                     guild_name,
@@ -62,7 +65,7 @@ def get_guild(guild_id: int):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.guilds.select(cursor, guild_id)
+            return guilds.select(cursor, guild_id)
 
 
 def get_rank(guild_id: int, member_id: int):
@@ -70,10 +73,11 @@ def get_rank(guild_id: int, member_id: int):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.members.rank(cursor, guild_id, member_id)
+            return members.rank(cursor, guild_id, member_id)
 
 
-def get_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
+def fetch_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
+    """Refreshes and return db member"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
@@ -81,30 +85,40 @@ def get_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
             return refresh_and_get_member(cursor, guild_id, member_id, nickname)
 
 
-def update_member_submission(guild_id: int, member_id: int, next_submission_time: datetime,last_submission: str):
+def get_member(guild_id: int, member_id: int):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.members.update_submission(
+            return members.select(cursor, guild_id, member_id)
+
+
+def update_member_submission(
+    guild_id: int, member_id: int, next_submission_time: datetime, last_submission: str
+):
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return members.update_submission(
                 cursor, guild_id, member_id, next_submission_time, last_submission
             )
+
 
 def cooldown_reset(guild_id: int, member_id: int):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.members.reset_cooldown(cursor, guild_id, member_id)
+            return members.reset_cooldown(cursor, guild_id, member_id)
+
 
 def request_register(guild_id, request_type, name, effect, value):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return requests.insert(
-                cursor, guild_id, request_type, name, effect, value
-            )
+            return requests.insert(cursor, guild_id, request_type, name, effect, value)
 
 
 def request_delete(guild_id, request_type, name, effect):
@@ -142,70 +156,56 @@ def add_points(guild_id, member_id, points):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return dao.members.add_points(cursor, guild_id, member_id, points)
+            return members.add_points(cursor, guild_id, member_id, points)
 
 
 def guild_exists(cursor, guild_id):
     """True if the guild exists in the database"""
-    return dao.guilds.select(cursor, guild_id) is not None
+    return guilds.select(cursor, guild_id) is not None
 
 
 def refresh_and_get_member(cursor, guild_id, member_id, nickname):
     """Create member if it doesn't exist, update its nickname then gets it"""
-    db_member = dao.members.select(cursor, guild_id, member_id)
+    db_member = members.select(cursor, guild_id, member_id)
     if db_member is None:
-        dao.members.insert(cursor, guild_id, member_id, nickname, 0, datetime.min, None)
-        db_member = dao.members.select(cursor, guild_id, member_id)
+        members.insert(cursor, guild_id, member_id, nickname, 0, datetime.min, None)
+        db_member = members.select(cursor, guild_id, member_id)
     else:  # Update nickname for database maintenability
-        dao.members.update(
+        members.update(
             cursor,
-            db_member[dao.members.GUILD],
-            db_member[dao.members.ID],
+            db_member[members.GUILD],
+            db_member[members.ID],
             nickname,
-            db_member[dao.members.POINTS],
-            db_member[dao.members.NEXT_SUBMISSION_TIME],
-            db_member[dao.members.LAST_SUBMISSION],
+            db_member[members.POINTS],
+            db_member[members.NEXT_SUBMISSION_TIME],
+            db_member[members.LAST_SUBMISSION],
         )
     return db_member
 
 
-def request_per_column(guid_id, request_type=None, name=None, effect=None):
-    """Groups every column in lists"""
-    db_requests = get_requests(guid_id, request_type, name, effect)
-    request_type = []
-    name = []
-    effect = []
-    value = []
-    for request in db_requests:
-        request_type.append(request[requests.REQUEST_TYPE])
-        name.append(request[requests.REQUEST_NAME])
-        effect.append(request[requests.EFFECT])
-        value.append(request[requests.VALUE])
-    request_type = list(dict.fromkeys(request_type))
-    name = list(dict.fromkeys(name))
-    effect = list(dict.fromkeys(effect))
-    value = list(dict.fromkeys(value))
-    return {"type": request_type, "name": name, "effect": effect, "value": value}
+def insert_reward(guild_id, condition, nature, reward_id, points_required):
+    """Insert a reward in the database"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return rewards.insert(
+                cursor, guild_id, condition, nature, reward_id, points_required
+            )
 
 
-def ordered_requests(guid_id, request_type=None, name=None, effect=None): # TODO: I forgot what i was writing this for
-    """Groups every column in a 3-dimensional dictionnary"""
-    db_requests = get_requests(guid_id, request_type, name, effect)
-    all = {}
-    for request in db_requests:
-        type_dict = all.get(request[requests.REQUEST_TYPE])
-        if type_dict is None:
-            all[request[requests.REQUEST_TYPE]] = {request[requests.REQUEST_NAME]:\
-                    {request[requests.EFFECT]:request[requests.VALUE]}
-                }
-            continue
-        name_dict = type_dict.get(request[requests.REQUEST_NAME])
-        if name_dict is None:
-            type_dict[request[requests.REQUEST_NAME]]=\
-                {request[requests.EFFECT]: request[requests.VALUE]}
-            continue
-        effect_dict = name_dict.get(request[requests.EFFECT])
-        if effect_dict is None:
-            name_dict[request[requests.EFFECT]] = request[requests.VALUE]
-            continue
-    return all
+def delete_reward(guild_id, condition, nature, reward_id):
+    """Delete a reward in the database"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return rewards.delete(cursor, guild_id, condition, nature, reward_id)
+
+def get_rewards(guild_id, condition=None, nature=None, reward_id=None):
+    """Selects a reward in the database"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return rewards.select(cursor, guild_id, condition, nature, reward_id)

@@ -13,6 +13,7 @@ from interactions import (
     SlashContext,
     Permissions,
     Member,
+    Role,
     ChannelType,
     BaseChannel,
 )
@@ -59,10 +60,10 @@ async def on_component(event: Component):
             effect = ctx.values[0]
             return await business.effect_component(ctx, effect, req_member, unique)
         case ["accept", *_]:
-            value = data1
+            value = int(data1)
             return await business.accept_component(ctx, req_member, unique, value)
         case ["deny", *_]:
-            value = data1
+            value = int(data1)
             return await business.deny_component(ctx, req_member, unique, value)
         case _:
             response = f"Something went wrong, unknown interaction {ctx.custom_id}"
@@ -165,12 +166,13 @@ async def card(ctx: SlashContext, member: Member = None):
         )  # db_guild is a polymorph, either guild or error message
     if member is None:
         member = ctx.member
-    db_member = dao.get_member(ctx.guild.id, member.id, member.display_name)
+    db_member = dao.fetch_member(ctx.guild.id, member.id, member.display_name)
     # Business
     rank = dao.get_rank(ctx.guild.id, member.id)
     return await ctx.send(
         embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
     )
+
 
 @slash_command(
     name="cooldown_reset",
@@ -197,9 +199,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     if member is None:
         member = ctx.member
     dao.cooldown_reset(ctx.guild.id, member.id)
-    return await ctx.send(
-        f"Request cooldown for <@{member.id}> have been reset."
-    )
+    return await ctx.send(f"Request cooldown for <@{member.id}> have been reset.")
 
 
 @slash_command(
@@ -244,6 +244,7 @@ async def request_add(
         return await ctx.send(error)
     return await business.add_request(ctx, request_type, name, effect, value)
 
+
 @slash_command(
     name="request_delete",
     description="Delete a request",
@@ -278,9 +279,7 @@ async def request_delete(ctx: SlashContext, request_type: str, name: str, effect
         return await ctx.send(error)
     # Business
     dao.request_delete(ctx.guild.id, request_type, name, effect)
-    return await ctx.send(
-        f"{request_type} {name} with effect {effect} removed"
-    )
+    return await ctx.send(f"{request_type} {name} with effect {effect} removed")
 
 
 @slash_command(
@@ -307,6 +306,7 @@ async def request_list(ctx: SlashContext, request_type: str):
     db_requests = dao.get_requests(ctx.guild.id, request_type=request_type)
     return await ctx.send(content=tools.requests_content(db_requests))
 
+
 @slash_command(
     name="points_add",
     description="Add points to a certain user",
@@ -324,7 +324,7 @@ async def request_list(ctx: SlashContext, request_type: str):
     opt_type=OptionType.INTEGER,
     required=True,
 )
-async def points_add(ctx:SlashContext, member: Member, points:int):
+async def points_add(ctx: SlashContext, member: Member, points: int):
     """Command to add point to the member"""
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -332,9 +332,9 @@ async def points_add(ctx:SlashContext, member: Member, points:int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    dao.get_member(member.guild.id, member.id, member.display_name)
-    dao.add_points(member.guild.id, member.id, points)
+    await business.add_points_listener(ctx.guild, member.id, points, member=member)
     return await ctx.send(f"Points added for {member.display_name}")
+
 
 @slash_command(
     name="points_sub",
@@ -353,7 +353,7 @@ async def points_add(ctx:SlashContext, member: Member, points:int):
     opt_type=OptionType.INTEGER,
     required=True,
 )
-async def points_sub(ctx:SlashContext, member: Member, points:int):
+async def points_sub(ctx: SlashContext, member: Member, points: int):
     """Command to subtract point to the member"""
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
@@ -361,8 +361,66 @@ async def points_sub(ctx:SlashContext, member: Member, points:int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    dao.get_member(member.guild.id, member.id, member.display_name)
-    dao.add_points(member.guild.id, member.id, -points)
+    dao.fetch_member(member.guild.id, member.id, member.display_name)
+    dao.add_points(ctx.guild, member.id, -points)
     return await ctx.send(f"Points subtracted for {member.display_name}")
+
+
+@slash_command(
+    name="reward_add",
+    description="Add a reward that users can get when gaining points",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+# @slash_option(
+#    name="reward_type",
+#    description="Type of the reward to award users",
+#    required=True,
+# )
+@slash_option(
+    name="reward",
+    description="A role to award",
+    required=True,
+    opt_type=OptionType.ROLE,
+)
+@slash_option(
+    name="points_required",
+    description="Amount of points required",
+    required=True,
+    opt_type=OptionType.INTEGER,
+)
+async def reward_add(ctx: SlashContext, reward: Role, points_required: int):
+    """Add a reward that users can get when gaining points"""
+    # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    return await business.add_reward(ctx, reward, points_required)
+
+
+@slash_command(
+    name="reward_delete",
+    description="Remove a reward",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="reward",
+    description="A role to award",
+    required=True,
+    opt_type=OptionType.ROLE,
+)
+async def reward_delete(ctx: SlashContext, reward: Role):
+    """Add a reward that users can get when gaining points"""
+    # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    return await business.remove_reward(ctx, reward)
+
 
 bot.start(TOKEN)

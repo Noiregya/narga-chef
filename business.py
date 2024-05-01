@@ -3,10 +3,12 @@
 import logging
 from datetime import datetime
 import psycopg
+from interactions.client.errors import (BotException)
 import dao.dao as dao
 import dao.members as members
 import dao.guilds as guilds
 import dao.requests as requests
+import dao.rewards as rewards
 import tools
 
 ONE_HOUR = 3600
@@ -31,7 +33,7 @@ async def image_received(ctx, images):
     if guild_error is not None or is_setup is False or is_right_channel is False:
         return  # Nothing to do
     # Make sure that the member exists and update its nickname in the database
-    db_member = dao.get_member(guild.id, author.id, author.display_name)
+    db_member = dao.fetch_member(guild.id, author.id, author.display_name)
     if (
         db_member[members.NEXT_SUBMISSION_TIME].year != datetime.min.year
     ):  # The user submitted before
@@ -44,7 +46,7 @@ async def image_received(ctx, images):
     image_string = ";".join(images)
     eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image_string
     eventDictionnary[f"users,{author.id},{ctx.message.id}"] = user_ids
-    type_list = dao.request_per_column(guild.id)["type"]
+    type_list = tools.request_per_column(guild.id)["type"]
     if len(type_list) == 0:
         return await ctx.send("Please start by registering requests for this guild")
     return await ctx.message.reply(
@@ -58,7 +60,9 @@ async def image_received(ctx, images):
 async def type_component(ctx, request_type, event_type, req_member, unique):
     """A component indicating the type of request that have been received"""
     eventDictionnary[f"{event_type},{req_member},{unique}"] = request_type
-    name_list = dao.request_per_column(ctx.guild.id, request_type=request_type)["name"]
+    name_list = tools.request_per_column(ctx.guild.id, request_type=request_type)[
+        "name"
+    ]
     if len(name_list) == 0:
         return await ctx.send(f"Could not find any {request_type}")
     return await ctx.edit_origin(
@@ -73,7 +77,7 @@ async def name_component(ctx, name, event_type, req_member, unique):
     """A component indicating the name of request that have been received"""
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
     eventDictionnary[f"{event_type},{req_member},{unique}"] = name
-    effect_list = dao.request_per_column(
+    effect_list = tools.request_per_column(
         ctx.guild.id, request_type=request_type, name=name
     )["effect"]
     if len(effect_list) == 0:
@@ -108,9 +112,12 @@ async def accept_component(ctx, req_member, unique, value):
     image_string = eventDictionnary.get(f"image,{req_member},{unique}")
     if image_string is None:
         return await ctx.edit_origin(
-            content=(f"This request expired, please ask <@{req_member}> to submit it again"),
-            components=[])
-    image_string = image_string.replace(";","\n")
+            content=(
+                f"This request expired, please ask <@{req_member}> to submit it again"
+            ),
+            components=[],
+        )
+    image_string = image_string.replace(";", "\n")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
     name = eventDictionnary.get(f"name,{req_member},{unique}")
     effect = eventDictionnary.get(f"effect,{req_member},{unique}")
@@ -121,12 +128,14 @@ async def accept_component(ctx, req_member, unique, value):
     # Update member
     member_pings = ""
     for user in users:
-        db_member = dao.get_member(ctx.guild.id, user)
-        dao.add_points(ctx.guild.id, user, value)
+        db_member = dao.fetch_member(ctx.guild.id, user)
+        await add_points_listener(ctx.guild, user, value)
         next_request_time = tools.calculate_next_submission_time(
-            db_member[members.NEXT_SUBMISSION_TIME],
-            db_guild[guilds.COOLDOWN])
-        dao.update_member_submission(ctx.guild.id, user, next_request_time, last_request)
+            db_member[members.NEXT_SUBMISSION_TIME], db_guild[guilds.COOLDOWN]
+        )
+        dao.update_member_submission(
+            ctx.guild.id, user, next_request_time, last_request
+        )
         # Send messages
         member_pings = member_pings + f"<@{user}> "
     await notify_member(ctx, member_pings, unique, value, fulfilled=True)
@@ -139,6 +148,7 @@ async def accept_component(ctx, req_member, unique, value):
         components=[],
     )
 
+
 async def deny_component(ctx, req_member, unique, value):
     """A component received when a user clicks the deny button"""
     modal = tools.get_denial_reason_modal()
@@ -146,13 +156,16 @@ async def deny_component(ctx, req_member, unique, value):
     await ctx.send_modal(modal=modal)
     if image_string is None:
         return await ctx.edit_origin(
-            content=(f"This request expired, please ask <@{req_member}> to submit it again"),
-            components=[])
-    image_string = image_string.replace(";","\n")
+            content=(
+                f"This request expired, please ask <@{req_member}> to submit it again"
+            ),
+            components=[],
+        )
+    image_string = image_string.replace(";", "\n")
     # Response received
     modal_ctx = await ctx.bot.wait_for_modal(modal)
     paragraph = modal_ctx.responses["reason"]
-    dao.add_points(ctx.guild.id, req_member, value)
+    await add_points_listener(ctx.guild, req_member, value)
     clear_events(unique, req_member)
     await notify_member(
         ctx, f"<@{req_member}>", unique, value, reason=paragraph, fulfilled=False
@@ -206,13 +219,14 @@ async def send_review_message(ctx, images, db_guild, db_request, unique):
         f" {db_request[requests.REQUEST_TYPE]}"
         f" {db_request[requests.REQUEST_NAME]} with effect"
         f" {db_request[requests.EFFECT]} and value"
-        f" {db_request[requests.VALUE]}\n" +
-        images,
+        f" {db_request[requests.VALUE]}\n" + images,
         components=components,
     )
 
 
-async def notify_member(ctx, member_pings, message, points, reason=None, fulfilled=False):
+async def notify_member(
+    ctx, member_pings, message, points, reason=None, fulfilled=False
+):
     """Notify members of the result of their request"""
     db_guild = dao.get_guild(ctx.guild.id)
     channel = await ctx.guild.fetch_channel(db_guild[guilds.SUBMISSION_CHANNEL])
@@ -238,30 +252,92 @@ def clear_events(unique, member):
     except KeyError:
         logging.info("Unable to delete event from the dictionnary")
 
+
 async def add_request(ctx, req_type, name, effect, value):
     """Add a new request to the database"""
-    req = dao.ordered_requests(ctx.guild.id)
+    req = tools.ordered_requests(ctx.guild.id)
     if req is not None:
         if len(req) >= MAX_OPTIONS:
-            return await ctx.send("Could not add the request, there can only be a maximum of"
-                f" {MAX_OPTIONS} types")
+            return await ctx.send(
+                "Could not add the request, there can only be a maximum of"
+                f" {MAX_OPTIONS} types"
+            )
         gotten_type = req.get(req_type)
         if gotten_type is not None:
             if len(gotten_type) >= MAX_OPTIONS:
-                return await ctx.send(f"Could not add the request, there can only be a maximum of"
-                    f" {MAX_OPTIONS} names in {req_type}")
+                return await ctx.send(
+                    f"Could not add the request, there can only be a maximum of"
+                    f" {MAX_OPTIONS} names in {req_type}"
+                )
             gotten_effect = req.get(req_type).get(name)
             if gotten_effect is not None and len(gotten_effect) >= MAX_OPTIONS:
-                return await ctx.send(f"Could not add the request, there can only be a maximum of"
-                    f" {MAX_OPTIONS} effects for {name}")
+                return await ctx.send(
+                    f"Could not add the request, there can only be a maximum of"
+                    f" {MAX_OPTIONS} effects for {name}"
+                )
     try:
-        dao.request_register(
-            ctx.guild.id, req_type, name, effect, value
-        )
+        dao.request_register(ctx.guild.id, req_type, name, effect, value)
     except psycopg.Error as e:
         logging.error(e)
-        return await ctx.send(f"Could not add {req_type} {name} with effect {effect}"
-            " please check that it doesn't already exists")
+        return await ctx.send(
+            f"Could not add {req_type} {name} with effect {effect}"
+            " please check that it doesn't already exists"
+        )
     return await ctx.send(
         f"{req_type} {name} with effect {effect} and value {value} added"
     )
+
+
+async def add_reward(
+    ctx, reward, points_required, condition="milestone", nature="role"
+):
+    """Adds a new reward"""
+    reward_string = f"<@&{reward.id}>"
+    try:
+        dao.insert_reward(ctx.guild.id, condition, nature, reward.id, points_required)
+    except psycopg.Error as e:
+        logging.error(e)
+        return await ctx.send(
+            f"Could not add {nature} {reward.name} obtained through {condition}"
+            " please check that it doesn't already exists"
+        )
+    return await ctx.send(
+        f"{nature} {reward_string} obtained through {condition} with {points_required}"
+        " points added",
+        ephemeral=True,
+    )
+    #  ctx.user.add_role(reward, "Milestone reward")
+
+
+async def remove_reward(ctx, reward, condition="milestone", nature="role"):
+    """Removes a reward"""
+    reward_string = f"<@&{reward.id}>"
+    try:
+        dao.delete_reward(ctx.guild.id, condition, nature, reward.id)
+    except psycopg.Error as e:
+        logging.error(e)
+        return await ctx.send(f"Could not delete this reward. {e}")
+    return await ctx.send(
+        f"{nature} {reward_string} obtained through {condition} removed", ephemeral=True
+    )
+
+async def update_rewards(guild_id, member, current_points):
+    """Update the rewards a member deserves"""
+    db_rewards = dao.get_rewards(guild_id)
+    for reward in db_rewards:
+        if reward[rewards.CONDITION] == "milestone"\
+            and reward[rewards.NATURE] == "role"\
+            and reward[rewards.POINTS_REQUIRED] <= current_points:
+            try:
+                await member.add_role(reward[rewards.REWARD], "Milestone reward")
+            except BotException:
+                return
+
+
+async def add_points_listener(guild_ctx, member_id, value, member=None):
+    """Business related to adding points"""
+    db_member = dao.get_member(guild_ctx.id, member_id)
+    if member is None:
+        member = await guild_ctx.fetch_member(member_id)
+    dao.add_points(guild_ctx.id, db_member[members.ID], value)
+    await update_rewards(guild_ctx.id, member, db_member[members.POINTS] + value)
