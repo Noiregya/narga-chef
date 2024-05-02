@@ -16,8 +16,10 @@ from interactions import (
     Role,
     ChannelType,
     BaseChannel,
+    Embed,
 )
 from interactions.api.events import MessageCreate, Component
+from interactions.ext.paginators import Paginator
 import dao.dao as dao
 import business
 import tools
@@ -42,7 +44,10 @@ async def on_message_create(ctx: MessageCreate):
 async def on_component(event: Component):
     """When a component is interacted with"""
     ctx = event.ctx
-    event_type, req_member, unique, data1 = ctx.custom_id.split(",")
+    try:
+        event_type, req_member, unique, data1 = ctx.custom_id.split(",")
+    except ValueError: # Ignore this interaction
+        return
     match [event_type, req_member, unique, data1]:  # Read component event id
         # Name field has been set
         case ["type", *_]:
@@ -303,8 +308,10 @@ async def request_list(ctx: SlashContext, request_type: str):
     if not is_setup:
         return await ctx.send(error)
     # Business
-    db_requests = dao.get_requests(ctx.guild.id, request_type=request_type)
-    return await ctx.send(content=tools.requests_content(db_requests))
+    #db_requests = dao.get_requests(ctx.guild.id, request_type=request_type)
+    request_embeds = tools.requests_content(ctx.guild.id, request_type)
+    paginator = Paginator.create_from_embeds(bot, *request_embeds)
+    return await paginator.send(ctx)
 
 
 @slash_command(
@@ -376,6 +383,12 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
 #    description="Type of the reward to award users",
 #    required=True,
 # )
+#@slash_option(
+#    name="condition",
+#    description="Condition for awarding reward",
+#    required=True,
+#    opt_type=OptionType.STRING,
+#)
 @slash_option(
     name="reward",
     description="A role to award",

@@ -128,7 +128,7 @@ async def accept_component(ctx, req_member, unique, value):
     # Update member
     member_pings = ""
     for user in users:
-        db_member = dao.fetch_member(ctx.guild.id, user)
+        db_member = dao.get_member(ctx.guild.id, user)
         await add_points_listener(ctx.guild, user, value)
         next_request_time = tools.calculate_next_submission_time(
             db_member[members.NEXT_SUBMISSION_TIME], db_guild[guilds.COOLDOWN]

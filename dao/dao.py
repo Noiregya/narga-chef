@@ -76,7 +76,7 @@ def get_rank(guild_id: int, member_id: int):
             return members.rank(cursor, guild_id, member_id)
 
 
-def fetch_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
+def fetch_member(guild_id: int, member_id: int, nickname: str):
     """Refreshes and return db member"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
