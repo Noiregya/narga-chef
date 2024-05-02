@@ -47,6 +47,7 @@ async def image_received(ctx, images):
     eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image_string
     eventDictionnary[f"users,{author.id},{ctx.message.id}"] = user_ids
     type_list = tools.request_per_column(guild.id)["type"]
+    type_list = list(dict.fromkeys(type_list))# Remove doubles
     if len(type_list) == 0:
         return await ctx.send("Please start by registering requests for this guild")
     return await ctx.message.reply(
@@ -63,6 +64,7 @@ async def type_component(ctx, request_type, event_type, req_member, unique):
     name_list = tools.request_per_column(ctx.guild.id, request_type=request_type)[
         "name"
     ]
+    name_list = list(dict.fromkeys(name_list))# Remove doubles
     if len(name_list) == 0:
         return await ctx.send(f"Could not find any {request_type}")
     return await ctx.edit_origin(
@@ -80,6 +82,7 @@ async def name_component(ctx, name, event_type, req_member, unique):
     effect_list = tools.request_per_column(
         ctx.guild.id, request_type=request_type, name=name
     )["effect"]
+    effect_list = list(dict.fromkeys(effect_list))# Remove doubles
     if len(effect_list) == 0:
         return await ctx.send(f"Could not find an effect for this {request_type}")
     return await ctx.edit_origin(

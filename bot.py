@@ -16,7 +16,6 @@ from interactions import (
     Role,
     ChannelType,
     BaseChannel,
-    Embed,
 )
 from interactions.api.events import MessageCreate, Component
 from interactions.ext.paginators import Paginator

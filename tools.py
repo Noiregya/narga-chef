@@ -185,10 +185,6 @@ def request_per_column(guid_id, request_type=None, name=None, effect=None):
         name.append(request[requests.REQUEST_NAME])
         effect.append(request[requests.EFFECT])
         value.append(request[requests.VALUE])
-    request_type = list(dict.fromkeys(request_type))
-    name = list(dict.fromkeys(name))
-    effect = list(dict.fromkeys(effect))
-    value = list(dict.fromkeys(value))
     return {"type": request_type, "name": name, "effect": effect, "value": value}
 
 
