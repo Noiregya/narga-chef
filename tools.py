@@ -175,9 +175,9 @@ def calculate_next_submission_time(previous_next, cooldown):
     )
 
 
-def request_per_column(guid_id, request_type=None, name=None, effect=None):
+def request_per_column(guild_id, request_type=None, name=None, effect=None):
     """Groups every column in lists"""
-    db_requests = dao.get_requests(guid_id, request_type, name, effect)
+    db_requests = dao.get_requests(guild_id, request_type, name, effect)
     request_type = []
     name = []
     effect = []
