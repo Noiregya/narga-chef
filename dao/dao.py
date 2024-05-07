@@ -16,7 +16,7 @@ load_dotenv()
 HOST = os.environ.get("host")
 PASSWORD = os.environ.get("password")
 DB_USER = os.environ.get("db_user")
-DB_NAME = "narga"
+DB_NAME = os.environ.get("db_name")
 
 # connection = psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}")
 
