@@ -443,8 +443,7 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    dao.dao.fetch_member(member.guild.id, member.id, member.display_name)
-    dao.dao.add_points(ctx.guild, member.id, -points)
+    await business.add_points_listener(ctx.guild, member.id, -points, member=member)
     return await ctx.send(f"Points subtracted for {member.display_name}")
 
 
