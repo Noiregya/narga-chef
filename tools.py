@@ -22,6 +22,7 @@ import dao.requests as requests
 ONE_HOUR = 3600
 PURPLE = "#7f03fc"
 AQUAMARINE = "#00edd9"
+PINK = "#ff66b0"
 
 
 def get_denial_reason_modal():
@@ -73,18 +74,52 @@ def generate_guild_card_embed(db_member, db_guild, rank):
     return embed
 
 
-def requests_content(db_requests):
+def requests_content(guild_id, request_type):
     """Format the requests in a string"""
-    res = "```csv\nType; Name; Effect; Value\n"
-    for request in db_requests:
-        res = (
-            f"{res}"
-            f"{request[requests.REQUEST_TYPE]};"
-            f"{request[requests.REQUEST_NAME]};"
-            f"{request[requests.EFFECT]};"
-            f"{request[requests.VALUE]}\n"
+    size_chunk = 15
+    ord_requests = request_per_column(guild_id, request_type)
+    req_type = ord_requests.get("type")
+    if len(req_type) < 1:
+        return [Embed(title="No result", description=f"Couldn't find any {request_type}")]
+    name_chunks = chunk(ord_requests["name"], size_chunk)
+    effect_chunks = chunk(ord_requests["effect"], size_chunk)
+    val_str = [f"{element}" for element in ord_requests["value"]]# Convert to strings
+    value_chunks = chunk(val_str, size_chunk)
+    embeds = []
+    #pylint: disable=C0200
+    #I'm not doing an enum here it makes no sense
+    for i in range(len(name_chunks)):
+        req_name = EmbedField(
+            name="Name",
+            value="\n".join(name_chunks[i]),
+            inline=True,
         )
-    return f"{res}```"
+        req_effect = EmbedField(
+            name="Effect",
+            value="\n".join(effect_chunks[i]),
+            inline=True,
+        )
+        req_value = EmbedField(
+            name="Value",
+            value="\n".join(value_chunks[i]),
+            inline=True,
+        )
+        embed = Embed(
+            color=PINK,
+            title=f"List of the {req_type}",
+            fields=[req_name, req_effect, req_value],
+        )
+        embeds.append(embed)
+    return embeds
+
+def chunk(elements, size):
+    """Divides a list into smaller lists of specified size"""
+    res = []
+    start = 0
+    end = len(elements)
+    for i in range(start, end, size):
+        res.append(elements[i:i+size])
+    return res
 
 
 def get_image_attachements(message):
@@ -140,9 +175,9 @@ def calculate_next_submission_time(previous_next, cooldown):
     )
 
 
-def request_per_column(guid_id, request_type=None, name=None, effect=None):
+def request_per_column(guild_id, request_type=None, name=None, effect=None):
     """Groups every column in lists"""
-    db_requests = dao.get_requests(guid_id, request_type, name, effect)
+    db_requests = dao.get_requests(guild_id, request_type, name, effect)
     request_type = []
     name = []
     effect = []
@@ -152,10 +187,6 @@ def request_per_column(guid_id, request_type=None, name=None, effect=None):
         name.append(request[requests.REQUEST_NAME])
         effect.append(request[requests.EFFECT])
         value.append(request[requests.VALUE])
-    request_type = list(dict.fromkeys(request_type))
-    name = list(dict.fromkeys(name))
-    effect = list(dict.fromkeys(effect))
-    value = list(dict.fromkeys(value))
     return {"type": request_type, "name": name, "effect": effect, "value": value}
 
 

@@ -2,11 +2,16 @@
 
 # Imports
 import os
+import logging
+import time
 from dotenv import load_dotenv
 from interactions import (
     Client,
     Intents,
     listen,
+    SlashCommand,
+    SlashCommandOption,
+    SlashCommandChoice,
     slash_command,
     slash_option,
     OptionType,
@@ -18,18 +23,151 @@ from interactions import (
     BaseChannel,
 )
 from interactions.api.events import MessageCreate, Component
-import dao.dao as dao
+from interactions.ext.paginators import Paginator
+import dao
 import business
 import tools
+import update
 
 # Inititialization
+logging.basicConfig()
+logging.root.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 load_dotenv()
 TOKEN = os.environ.get("token")
 intents = Intents.MESSAGE_CONTENT | Intents.GUILD_MESSAGES | Intents.GUILDS
-bot = Client(intents=intents)
+
+IS_UPDATED = update.run_updates()
+bot = Client(intents=intents, delete_unused_application_cmds=IS_UPDATED)
 
 
-# Listeners
+# Per guild requests, registered manually see guild_commands
+def generate_request_list_cmd(guild_id, types_choices):
+    """request_list command depending on the available request types"""
+    request_list_cmd = SlashCommand(
+        name="request_list",
+        description="List all the requests",
+        scopes=[str(guild_id)],
+        default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+        options=[
+            SlashCommandOption(
+                name="request_type",
+                description="Type of the request",
+                type=OptionType.STRING,
+                required=True,
+                choices=types_choices,
+            )
+        ],
+        callback=request_list,
+    )
+    return request_list_cmd
+
+
+async def request_list(ctx: SlashContext, request_type: str):
+    """Request list command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    request_embeds = tools.requests_content(ctx.guild.id, request_type)
+    paginator = Paginator.create_from_embeds(bot, *request_embeds)
+    return await paginator.send(ctx)
+
+
+def generate_request_delete_cmd(guild_id, types_choices):
+    """request_delete command depending on the available request types"""
+    request_delete_cmd = SlashCommand(
+        name="request_delete",
+        description="Delete a request",
+        scopes=[str(guild_id)],
+        default_member_permissions=Permissions.MANAGE_GUILD,
+        options=[
+            SlashCommandOption(
+                name="request_type",
+                description="Type of the request",
+                type=OptionType.STRING,
+                required=True,
+                choices=types_choices,
+            ),
+            SlashCommandOption(
+                name="name",
+                description="Name of the request",
+                type=OptionType.STRING,
+                required=True,
+            ),
+            SlashCommandOption(
+                name="effect",
+                description="Effect of the request",
+                type=OptionType.STRING,
+                required=True,
+            ),
+        ],
+        callback=request_delete,
+    )
+    return request_delete_cmd
+
+
+async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
+    """Request delete command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    dao.dao.request_delete(ctx.guild.id, request_type, name, effect)
+    # Respond
+    return await ctx.send(f"{request_type} {name} with effect {effect} removed")
+
+
+def get_guild_commands(guilds):
+    """Get all the guild commands to be registered in the guild scope"""
+    scopes = []
+    commands = []
+    for guild in guilds:
+        db_types = [
+            req[dao.requests.REQUEST_TYPE] for req in dao.dao.get_requests(guild)
+        ]
+        db_types = list(dict.fromkeys(db_types))
+        types_choices = list(
+            SlashCommandChoice(name=element, value=element) for element in db_types
+        )
+        if len(types_choices) > 0:
+            scope = guild
+            commands.append(generate_request_list_cmd(scope, types_choices))
+            commands.append(generate_request_delete_cmd(scope, types_choices))
+            scopes.append(scope)
+    return [scopes, commands]
+
+
+async def register_guild_commands(guilds):
+    """Register all the guild commands to discord"""
+    scopes, commands = get_guild_commands(guilds)
+    for command in commands:
+        bot.add_interaction(command)
+    await bot.synchronise_interactions(scopes=scopes)
+
+
+@listen()  # this decorator tells snek that it needs to listen for the corresponding event
+async def on_ready():
+    """This event is called when the bot is ready to respond to commands"""
+    # pylint:disable=W0603
+    logger.info("This bot is owned by %s", bot.owner)
+    if IS_UPDATED:
+        # Register all the guild specific commands
+        guild_ids = [guild.id for guild in bot.guilds]
+        await register_guild_commands(guild_ids)
+        logger.info("Update finished")
+    else:
+        logger.info("Bot up to date")
+
+
 @listen()
 async def on_message_create(ctx: MessageCreate):
     """When the discord bot sees a message"""
@@ -42,7 +180,10 @@ async def on_message_create(ctx: MessageCreate):
 async def on_component(event: Component):
     """When a component is interacted with"""
     ctx = event.ctx
-    event_type, req_member, unique, data1 = ctx.custom_id.split(",")
+    try:
+        event_type, req_member, unique, data1 = ctx.custom_id.split(",")
+    except ValueError:  # Ignore this interaction
+        return
     match [event_type, req_member, unique, data1]:  # Read component event id
         # Name field has been set
         case ["type", *_]:
@@ -130,7 +271,7 @@ async def setup(
     if info_channel.type != ChannelType.GUILD_TEXT:
         return await ctx.send("info_channel is not a text channel", ephemeral=True)
     # Setup in database
-    dao.setup(
+    dao.dao.setup(
         ctx.guild.id,
         ctx.guild.name,
         currency,
@@ -166,9 +307,9 @@ async def card(ctx: SlashContext, member: Member = None):
         )  # db_guild is a polymorph, either guild or error message
     if member is None:
         member = ctx.member
-    db_member = dao.fetch_member(ctx.guild.id, member.id, member.display_name)
+    db_member = dao.dao.fetch_member(ctx.guild.id, member.id, member.display_name)
     # Business
-    rank = dao.get_rank(ctx.guild.id, member.id)
+    rank = dao.dao.get_rank(ctx.guild.id, member.id)
     return await ctx.send(
         embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
     )
@@ -198,7 +339,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
         )  # db_guild is a polymorph, either guild or error message
     if member is None:
         member = ctx.member
-    dao.cooldown_reset(ctx.guild.id, member.id)
+    dao.dao.cooldown_reset(ctx.guild.id, member.id)
     return await ctx.send(f"Request cooldown for <@{member.id}> have been reset.")
 
 
@@ -242,69 +383,10 @@ async def request_add(
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.add_request(ctx, request_type, name, effect, value)
-
-
-@slash_command(
-    name="request_delete",
-    description="Delete a request",
-    default_member_permissions=Permissions.MANAGE_GUILD,
-)
-@slash_option(
-    name="request_type",
-    description="Type of the request",
-    opt_type=OptionType.STRING,
-    required=True,
-)
-@slash_option(
-    name="name",
-    description="Name of the request",
-    opt_type=OptionType.STRING,
-    required=True,
-)
-@slash_option(
-    name="effect",
-    description="Effect of the request",
-    opt_type=OptionType.STRING,
-    required=True,
-)
-async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
-    """Request delete command have been received"""
-    # Check input and fetch from database
-    guild_error = tools.check_in_guild(ctx)
-    if guild_error is not None:
-        return await ctx.send(guild_error)
-    is_setup, error = tools.check_guild_setup(ctx.guild.id)
-    if not is_setup:
-        return await ctx.send(error)
-    # Business
-    dao.request_delete(ctx.guild.id, request_type, name, effect)
-    return await ctx.send(f"{request_type} {name} with effect {effect} removed")
-
-
-@slash_command(
-    name="request_list",
-    description="List all the requests",
-    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
-)
-@slash_option(
-    name="request_type",
-    description="Type of the request",
-    opt_type=OptionType.STRING,
-    required=True,
-)
-async def request_list(ctx: SlashContext, request_type: str):
-    """Request list command have been received"""
-    # Check input and fetch from database
-    guild_error = tools.check_in_guild(ctx)
-    if guild_error is not None:
-        return await ctx.send(guild_error)
-    is_setup, error = tools.check_guild_setup(ctx.guild.id)
-    if not is_setup:
-        return await ctx.send(error)
-    # Business
-    db_requests = dao.get_requests(ctx.guild.id, request_type=request_type)
-    return await ctx.send(content=tools.requests_content(db_requests))
+    # Update DB
+    res = business.add_request(ctx, request_type, name, effect, value)
+    # Respond
+    return await ctx.send(res)
 
 
 @slash_command(
@@ -361,8 +443,7 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    dao.fetch_member(member.guild.id, member.id, member.display_name)
-    dao.add_points(ctx.guild, member.id, -points)
+    await business.add_points_listener(ctx.guild, member.id, -points, member=member)
     return await ctx.send(f"Points subtracted for {member.display_name}")
 
 
@@ -375,6 +456,12 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
 #    name="reward_type",
 #    description="Type of the reward to award users",
 #    required=True,
+# )
+# @slash_option(
+#    name="condition",
+#    description="Condition for awarding reward",
+#    required=True,
+#    opt_type=OptionType.STRING,
 # )
 @slash_option(
     name="reward",

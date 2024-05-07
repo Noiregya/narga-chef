@@ -47,6 +47,7 @@ async def image_received(ctx, images):
     eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image_string
     eventDictionnary[f"users,{author.id},{ctx.message.id}"] = user_ids
     type_list = tools.request_per_column(guild.id)["type"]
+    type_list = list(dict.fromkeys(type_list))# Remove doubles
     if len(type_list) == 0:
         return await ctx.send("Please start by registering requests for this guild")
     return await ctx.message.reply(
@@ -63,6 +64,7 @@ async def type_component(ctx, request_type, event_type, req_member, unique):
     name_list = tools.request_per_column(ctx.guild.id, request_type=request_type)[
         "name"
     ]
+    name_list = list(dict.fromkeys(name_list))# Remove doubles
     if len(name_list) == 0:
         return await ctx.send(f"Could not find any {request_type}")
     return await ctx.edit_origin(
@@ -80,6 +82,7 @@ async def name_component(ctx, name, event_type, req_member, unique):
     effect_list = tools.request_per_column(
         ctx.guild.id, request_type=request_type, name=name
     )["effect"]
+    effect_list = list(dict.fromkeys(effect_list))# Remove doubles
     if len(effect_list) == 0:
         return await ctx.send(f"Could not find an effect for this {request_type}")
     return await ctx.edit_origin(
@@ -128,7 +131,7 @@ async def accept_component(ctx, req_member, unique, value):
     # Update member
     member_pings = ""
     for user in users:
-        db_member = dao.fetch_member(ctx.guild.id, user)
+        db_member = dao.get_member(ctx.guild.id, user)
         await add_points_listener(ctx.guild, user, value)
         next_request_time = tools.calculate_next_submission_time(
             db_member[members.NEXT_SUBMISSION_TIME], db_guild[guilds.COOLDOWN]
@@ -253,25 +256,25 @@ def clear_events(unique, member):
         logging.info("Unable to delete event from the dictionnary")
 
 
-async def add_request(ctx, req_type, name, effect, value):
+def add_request(ctx, req_type, name, effect, value):
     """Add a new request to the database"""
     req = tools.ordered_requests(ctx.guild.id)
     if req is not None:
         if len(req) >= MAX_OPTIONS:
-            return await ctx.send(
+            return (
                 "Could not add the request, there can only be a maximum of"
                 f" {MAX_OPTIONS} types"
             )
         gotten_type = req.get(req_type)
         if gotten_type is not None:
             if len(gotten_type) >= MAX_OPTIONS:
-                return await ctx.send(
+                return (
                     f"Could not add the request, there can only be a maximum of"
                     f" {MAX_OPTIONS} names in {req_type}"
                 )
             gotten_effect = req.get(req_type).get(name)
             if gotten_effect is not None and len(gotten_effect) >= MAX_OPTIONS:
-                return await ctx.send(
+                return (
                     f"Could not add the request, there can only be a maximum of"
                     f" {MAX_OPTIONS} effects for {name}"
                 )
@@ -279,11 +282,11 @@ async def add_request(ctx, req_type, name, effect, value):
         dao.request_register(ctx.guild.id, req_type, name, effect, value)
     except psycopg.Error as e:
         logging.error(e)
-        return await ctx.send(
+        return (
             f"Could not add {req_type} {name} with effect {effect}"
             " please check that it doesn't already exists"
         )
-    return await ctx.send(
+    return (
         f"{req_type} {name} with effect {effect} and value {value} added"
     )
 

@@ -16,7 +16,7 @@ load_dotenv()
 HOST = os.environ.get("host")
 PASSWORD = os.environ.get("password")
 DB_USER = os.environ.get("db_user")
-DB_NAME = "narga"
+DB_NAME = os.environ.get("db_name")
 
 # connection = psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}")
 
@@ -76,7 +76,7 @@ def get_rank(guild_id: int, member_id: int):
             return members.rank(cursor, guild_id, member_id)
 
 
-def fetch_member(guild_id: int, member_id: int, nickname: str = "Unknown"):
+def fetch_member(guild_id: int, member_id: int, nickname: str):
     """Refreshes and return db member"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
