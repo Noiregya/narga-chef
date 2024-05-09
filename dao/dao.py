@@ -74,7 +74,7 @@ def get_rank(guild_id: int, member_id: int):
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return members.rank(cursor, guild_id, member_id)
+            return members.rank(cursor, guild_id, member_id)[0]
 
 
 def fetch_member(guild_id: int, member_id: int, nickname: str):

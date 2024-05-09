@@ -65,7 +65,7 @@ def generate_guild_card_embed(db_member, db_guild, rank):
         value=str(db_member[members.POINTS] - db_member[members.SPENT]),
         inline=True,
     )
-    rank = EmbedField(name="Rank", value=str(rank[2]), inline=True)
+    rank = EmbedField(name="Rank", value=str(rank), inline=True)
     if db_member[members.NEXT_SUBMISSION_TIME].year is datetime.min.year:
         timestamp_string = "No submission yet"
     else:
