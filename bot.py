@@ -550,11 +550,12 @@ async def generate_shop(ctx: SlashContext):
     # business.clean_shop(db_guild)
     res = business.generate_shop(db_guild)
     channel = ctx.channel
+    await ctx.defer(ephemeral=True)
     for kvp in res.items():
         messages = kvp[1]
         for message in messages:
             await channel.send(content = message["content"], components = message["components"])
-    return await ctx.send(content="Shop have been generated", ephemeral=True)
+    return await ctx.send(content="Shop have been generated")
 
 
 bot.start(TOKEN)
