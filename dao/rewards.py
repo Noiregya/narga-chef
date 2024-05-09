@@ -15,7 +15,7 @@ def insert(cursor, guild, condition, nature, reward, points_required):
 def select(cursor, guild, condition = None, nature = None, reward = None):
     """Select constructed depending on the parameters that's given to it"""
     req = (f"SELECT guild, condition, nature, reward, points_required FROM {TABLE_NAME}"
-        " where guild=%s ")
+        " where guild=%s")
     parm = []
     if condition is not None:
         req = f"{req}AND condition=%s "
@@ -27,6 +27,7 @@ def select(cursor, guild, condition = None, nature = None, reward = None):
         req = f"{req}AND effect=%s "
         parm.insert(len(parm),reward)
     parm.insert(0, guild)
+    req = f"{req}ORDER BY nature "
     cursor.execute(req,parm)
     return cursor.fetchall()
 

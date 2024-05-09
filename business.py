@@ -183,6 +183,28 @@ async def deny_component(ctx, req_member, unique, value):
     )
 
 
+async def buy_component(ctx, nature, reward_content, cost):
+    """A component received when a member tries to buy a reward"""
+    db_member = dao.get_member(ctx.guild.id, ctx.author.id)
+    balance = db_member[members.POINTS] - db_member[members.SPENT]
+    if balance >= cost:
+        content, error = await award(ctx, nature, reward_content)
+        if error:
+            return content
+        dao.add_spent(ctx.guild.id, ctx.author.id, cost)
+    else:
+        content = f"Not enough funds, cost: {cost} balance: {balance}"
+    return content
+
+async def toggle_component(ctx, nature, reward_content):
+    """A component received when a member tries to toggle a reward"""
+    if nature == "role":
+        content = await toggle_role_reward(ctx, reward_content)
+    if content is None:
+        content = f"Could not toggle {nature}"
+    return content
+
+
 async def send_to_review(ctx, images, request_type, name, effect, unique):
     """Send a request to be reviewed"""
     guild = ctx.guild.id
@@ -344,3 +366,49 @@ async def add_points_listener(guild_ctx, member_id, value, member=None):
         member = await guild_ctx.fetch_member(member_id)
     dao.add_points(guild_ctx.id, db_member[members.ID], value)
     await update_rewards(guild_ctx.id, member, db_member[members.POINTS] + value)
+
+
+def generate_shop(db_guild):
+    """Generate all the components to send to make the shop"""
+    # Makes new shop
+    guild_rewards = dao.get_rewards(db_guild[guilds.ID], condition="bought")
+    return tools.generate_shop_items(db_guild, guild_rewards)
+
+
+async def award(ctx, nature, reward_content):
+    """Award a reward to a member"""
+    content = None
+    error = False
+    guild_id = ctx.guild.id
+    user_id = ctx.author.id
+    db_award_attr = dao.select_award_attribution(guild_id, user_id, nature, reward_content)
+    if len(db_award_attr) > 0:
+        error = True
+        content = f"Couldn't give {nature}, you already have it"
+        return [content, error]
+    dao.award_reward(guild_id, user_id, nature, reward_content)
+    if nature == "role":
+        await ctx.author.add_role(reward_content)
+        content = f"Role <@&{reward_content}> awarded"
+    if content is None:
+        error = True
+        content = f"Could not award reward for nature {nature}"
+    return [content, error]
+
+async def toggle_role_reward(ctx, role_id):
+    """Toggles a role reward"""
+    content = None
+    guild_id = ctx.guild.id
+    user = ctx.author
+    db_award_attr = dao.select_award_attribution(guild_id, user.id, "role", role_id)
+    if len(db_award_attr) == 0:
+        content = "You haven't earned this reward yet"
+        return content
+    has_role = user.has_role(role_id)
+    if has_role:
+        await user.remove_role(role_id)
+        content = f"Role <@&{role_id}> removed"
+    else:
+        await ctx.author.add_role(role_id)
+        content = f"Role <@&{role_id}> given"
+    return content

@@ -3,7 +3,6 @@
 # Imports
 import os
 import logging
-import time
 from dotenv import load_dotenv
 from interactions import (
     Client,
@@ -181,31 +180,42 @@ async def on_component(event: Component):
     """When a component is interacted with"""
     ctx = event.ctx
     try:
-        event_type, req_member, unique, data1 = ctx.custom_id.split(",")
+        event_type, p1, p2, p3 = ctx.custom_id.split(",")
     except ValueError:  # Ignore this interaction
         return
-    match [event_type, req_member, unique, data1]:  # Read component event id
+    match [event_type, p1, p2, p3]:  # Read component event id
         # Name field has been set
         case ["type", *_]:
+            req_member, unique = [p1, p2]
             request_type = ctx.values[0]
             return await business.type_component(
                 ctx, request_type, event_type, req_member, unique
             )
         case ["name", *_]:
+            req_member, unique = [p1, p2]
             name = ctx.values[0]
             return await business.name_component(
                 ctx, name, event_type, req_member, unique
             )
         # Effect field has been set
         case ["effect", *_]:
+            req_member, unique = [p1, p2]
             effect = ctx.values[0]
             return await business.effect_component(ctx, effect, req_member, unique)
         case ["accept", *_]:
-            value = int(data1)
+            req_member, unique, value = [p1, p2, int(p3)]
             return await business.accept_component(ctx, req_member, unique, value)
         case ["deny", *_]:
-            value = int(data1)
+            req_member, unique, value = [p1, p2, int(p3)]
             return await business.deny_component(ctx, req_member, unique, value)
+        case ["buy", *_]:
+            nature, reward_content, cost = [p1, p2, int(p3)]
+            res = await business.buy_component(ctx, nature, reward_content, cost)
+            return await ctx.send(content=res, ephemeral=True)
+        case ["toggle", *_]:
+            nature, reward_content = [p1, p2]
+            res = await business.toggle_component(ctx, nature, reward_content)
+            return await ctx.send(content=res, ephemeral=True)
         case _:
             response = f"Something went wrong, unknown interaction {ctx.custom_id}"
     return await ctx.edit_origin(content=response, components=[])
@@ -457,12 +467,16 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
 #    description="Type of the reward to award users",
 #    required=True,
 # )
-# @slash_option(
-#    name="condition",
-#    description="Condition for awarding reward",
-#    required=True,
-#    opt_type=OptionType.STRING,
-# )
+@slash_option(
+   name="condition",
+   description="Condition for awarding reward",
+   required=True,
+   opt_type=OptionType.STRING,
+   choices=[
+        SlashCommandChoice(name="Bought", value="bought"),
+        SlashCommandChoice(name="Milestone", value="milestone")
+    ]
+)
 @slash_option(
     name="reward",
     description="A role to award",
@@ -475,7 +489,7 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     required=True,
     opt_type=OptionType.INTEGER,
 )
-async def reward_add(ctx: SlashContext, reward: Role, points_required: int):
+async def reward_add(ctx: SlashContext, condition: str, reward: Role, points_required: int):
     """Add a reward that users can get when gaining points"""
     # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
     guild_error = tools.check_in_guild(ctx)
@@ -484,7 +498,7 @@ async def reward_add(ctx: SlashContext, reward: Role, points_required: int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.add_reward(ctx, reward, points_required)
+    return await business.add_reward(ctx, reward, points_required, condition = condition)
 
 
 @slash_command(
@@ -493,12 +507,22 @@ async def reward_add(ctx: SlashContext, reward: Role, points_required: int):
     default_member_permissions=Permissions.MANAGE_GUILD,
 )
 @slash_option(
+   name="condition",
+   description="Condition for awarding reward",
+   required=True,
+   opt_type=OptionType.STRING,
+   choices=[
+        SlashCommandChoice(name="Bought", value="bought"),
+        SlashCommandChoice(name="Milestone", value="milestone")
+    ]
+)
+@slash_option(
     name="reward",
     description="A role to award",
     required=True,
     opt_type=OptionType.ROLE,
 )
-async def reward_delete(ctx: SlashContext, reward: Role):
+async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
     """Add a reward that users can get when gaining points"""
     # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
     guild_error = tools.check_in_guild(ctx)
@@ -507,7 +531,30 @@ async def reward_delete(ctx: SlashContext, reward: Role):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.remove_reward(ctx, reward)
+    return await business.remove_reward(ctx, reward, condition = condition) # TODO: Respond here instead of in business
+
+
+@slash_command(
+    name="shop",
+    description="Generates a shop in the current channel with all the rewards",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+async def generate_shop(ctx: SlashContext):
+    """Generates a shop in the current channel with all the rewards"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(db_guild)
+    # business.clean_shop(db_guild)
+    res = business.generate_shop(db_guild)
+    channel = ctx.channel
+    for kvp in res.items():
+        messages = kvp[1]
+        for message in messages:
+            await channel.send(content = message["content"], components = message["components"])
+    return await ctx.send(content="Shop have been generated", ephemeral=True)
 
 
 bot.start(TOKEN)
