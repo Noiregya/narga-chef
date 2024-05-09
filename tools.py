@@ -237,7 +237,7 @@ def generate_shop_items(db_guild, db_rewards):
             case "role":
                 reward_str =  f"<@&{reward_content}>"
         message = {
-            "content" : f"{nature.capitalize()} {reward_str}: {points} {db_guild[guilds.CURRENCY]}",
+            "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
             "components" : ActionRow(
                 Button(
                     style=ButtonStyle.GREEN,
