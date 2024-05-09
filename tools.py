@@ -18,6 +18,7 @@ import dao.dao as dao
 import dao.members as members
 import dao.guilds as guilds
 import dao.requests as requests
+import dao.rewards as rewards
 
 ONE_HOUR = 3600
 PURPLE = "#7f03fc"
@@ -59,6 +60,11 @@ def generate_guild_card_embed(db_member, db_guild, rank):
         value=str(db_member[members.POINTS]),
         inline=True,
     )
+    balance = EmbedField(
+        name="Balance",
+        value=str(db_member[members.POINTS] - db_member[members.SPENT]),
+        inline=True,
+    )
     rank = EmbedField(name="Rank", value=str(rank[2]), inline=True)
     if db_member[members.NEXT_SUBMISSION_TIME].year is datetime.min.year:
         timestamp_string = "No submission yet"
@@ -69,7 +75,7 @@ def generate_guild_card_embed(db_member, db_guild, rank):
     embed = Embed(
         color=PURPLE,
         title=f"Guild card for {db_member[members.NICKNAME]}",
-        fields=[points, rank, cooldown],
+        fields=[points, balance, rank, cooldown],
     )
     return embed
 
@@ -214,3 +220,36 @@ def ordered_requests(guid_id, request_type=None, name=None, effect=None):
             name_dict[request[requests.EFFECT]] = request[requests.VALUE]
             continue
     return all_req
+
+
+def generate_shop_items(db_guild, db_rewards):
+    """Generate messages of each of the provided items with interactions to buy them"""
+    rewards_per_nature = {}
+    for reward in db_rewards:
+        nature = reward[rewards.NATURE]
+        reward_content = reward[rewards.REWARD]
+        points = reward[rewards.POINTS_REQUIRED]
+        reward_nature_list = rewards_per_nature.get(nature)
+        reward_nature_list = [] if reward_nature_list is None else reward_nature_list
+        # get the list to append with the element
+        reward_str = ""
+        match nature:
+            case "role":
+                reward_str =  f"<@&{reward_content}>"
+        message = {
+            "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
+            "components" : ActionRow(
+                Button(
+                    style=ButtonStyle.GREEN,
+                    label="Buy",
+                    custom_id=f"buy,{nature},{reward_content},{points}",
+                ),Button(
+                    style=ButtonStyle.BLUE,
+                    label="Toggle",
+                    custom_id=f"toggle,{nature},{reward_content},none",
+                )
+            )
+        }
+        reward_nature_list.append(message)
+        rewards_per_nature[nature] = reward_nature_list
+    return rewards_per_nature

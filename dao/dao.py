@@ -10,6 +10,7 @@ import dao.guilds as guilds
 import dao.members as members
 import dao.requests as requests
 import dao.rewards as rewards
+import dao.reward_attr as reward_attr
 
 load_dotenv()
 
@@ -158,6 +159,13 @@ def add_points(guild_id, member_id, points):
         with connection.cursor() as cursor:
             return members.add_points(cursor, guild_id, member_id, points)
 
+def add_spent(guild_id, member_id, points):
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return members.add_spent(cursor, guild_id, member_id, points)
+
 
 def guild_exists(cursor, guild_id):
     """True if the guild exists in the database"""
@@ -168,7 +176,7 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
     """Create member if it doesn't exist, update its nickname then gets it"""
     db_member = members.select(cursor, guild_id, member_id)
     if db_member is None:
-        members.insert(cursor, guild_id, member_id, nickname, 0, datetime.min, None)
+        members.insert(cursor, guild_id, member_id, nickname, 0, 0, datetime.min, None)
         db_member = members.select(cursor, guild_id, member_id)
     else:  # Update nickname for database maintenability
         members.update(
@@ -177,6 +185,7 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
             db_member[members.ID],
             nickname,
             db_member[members.POINTS],
+            db_member[members.SPENT],
             db_member[members.NEXT_SUBMISSION_TIME],
             db_member[members.LAST_SUBMISSION],
         )
@@ -202,6 +211,7 @@ def delete_reward(guild_id, condition, nature, reward_id):
         with connection.cursor() as cursor:
             return rewards.delete(cursor, guild_id, condition, nature, reward_id)
 
+
 def get_rewards(guild_id, condition=None, nature=None, reward_id=None):
     """Selects a reward in the database"""
     with psycopg.connect(
@@ -209,3 +219,30 @@ def get_rewards(guild_id, condition=None, nature=None, reward_id=None):
     ) as connection:
         with connection.cursor() as cursor:
             return rewards.select(cursor, guild_id, condition, nature, reward_id)
+
+
+def award_reward(guild_id, user_id, nature, reward):
+    """Links a reward to a user"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return reward_attr.insert(cursor, guild_id, user_id, nature, reward)
+
+
+def award_deny(guild_id, user_id, nature, reward):
+    """Unlinks a reward to a user"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return reward_attr.delete(cursor, guild_id, user_id, nature, reward)
+
+
+def select_award_attribution(guild_id, user_id, nature, reward):
+    """Selects award attributions"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return reward_attr.select(cursor, guild_id, user_id, nature, reward)
