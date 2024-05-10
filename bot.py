@@ -37,6 +37,7 @@ TOKEN = os.environ.get("token")
 intents = Intents.MESSAGE_CONTENT | Intents.GUILD_MESSAGES | Intents.GUILDS
 
 IS_UPDATED = update.run_updates()
+IS_UPDATED = True #TODO: Remove this, crutch because callbacks have to be remade
 bot = Client(intents=intents, delete_unused_application_cmds=IS_UPDATED)
 
 

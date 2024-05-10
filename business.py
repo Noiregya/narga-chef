@@ -205,6 +205,80 @@ async def toggle_component(ctx, nature, reward_content):
     return content
 
 
+def get_guild_commands(guilds):
+    """Get all the guild commands to be registered in the guild scope"""
+    scopes = []
+    commands = []
+    for guild in guilds:
+        db_types = [
+            req[dao.requests.REQUEST_TYPE] for req in dao.dao.get_requests(guild)
+        ]
+        db_types = list(dict.fromkeys(db_types))
+        types_choices = list(
+            SlashCommandChoice(name=element, value=element) for element in db_types
+        )
+        if len(types_choices) > 0:
+            scope = guild
+            commands.append(tools.generate_request_list_cmd(scope, types_choices))
+            commands.append(tools.generate_request_delete_cmd(scope, types_choices))
+            scopes.append(scope)
+    return [scopes, commands]
+
+
+def generate_request_list_cmd(guild_id, types_choices):
+    """request_list command depending on the available request types"""
+    request_list_cmd = SlashCommand(
+        name="request_list",
+        description="List all the requests",
+        scopes=[str(guild_id)],
+        default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+        options=[
+            SlashCommandOption(
+                name="request_type",
+                description="Type of the request",
+                type=OptionType.STRING,
+                required=True,
+                choices=types_choices,
+            )
+        ],
+        callback=request_list,
+    )
+    return request_list_cmd
+
+    
+def generate_request_delete_cmd(guild_id, types_choices):
+    """request_delete command depending on the available request types"""
+    request_delete_cmd = SlashCommand(
+        name="request_delete",
+        description="Delete a request",
+        scopes=[str(guild_id)],
+        default_member_permissions=Permissions.MANAGE_GUILD,
+        options=[
+            SlashCommandOption(
+                name="request_type",
+                description="Type of the request",
+                type=OptionType.STRING,
+                required=True,
+                choices=types_choices,
+            ),
+            SlashCommandOption(
+                name="name",
+                description="Name of the request",
+                type=OptionType.STRING,
+                required=True,
+            ),
+            SlashCommandOption(
+                name="effect",
+                description="Effect of the request",
+                type=OptionType.STRING,
+                required=True,
+            ),
+        ],
+        callback=request_delete,
+    )
+    return request_delete_cmd
+
+
 async def send_to_review(ctx, images, request_type, name, effect, unique):
     """Send a request to be reviewed"""
     guild = ctx.guild.id
@@ -394,6 +468,7 @@ async def award(ctx, nature, reward_content):
         error = True
         content = f"Could not award reward for nature {nature}"
     return [content, error]
+
 
 async def toggle_role_reward(ctx, role_id):
     """Toggles a role reward"""
