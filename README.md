@@ -1,5 +1,5 @@
 # Getting started
-clone the repository then cd inside nargaChef
+clone the repository then cd inside narga-chef
 ## Initialize python environment
 ./bin/install
 ## Initialize the database
