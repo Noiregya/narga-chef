@@ -325,6 +325,28 @@ async def card(ctx: SlashContext, member: Member = None):
         embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
     )
 
+@slash_command(
+    name="leaderboard",
+    description="Show the guild card for the specified member",
+    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+)
+async def leaderboard(ctx: SlashContext):
+    """Card command have been received"""
+    # Check input
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(
+            db_guild
+        )
+    # Business
+    db_leaderboard = dao.dao.get_leaderboard(ctx.guild.id)
+    request_embeds = tools.generate_leaderboard(db_leaderboard, db_guild[dao.guilds.CURRENCY])
+    paginator = Paginator.create_from_embeds(bot, *request_embeds)
+    return await paginator.send(ctx)
+
 
 @slash_command(
     name="cooldown_reset",
