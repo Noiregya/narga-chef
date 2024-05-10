@@ -94,17 +94,23 @@ def get_member(guild_id: int, member_id: int):
             return members.select(cursor, guild_id, member_id)
 
 
-def update_member_submission(
-    guild_id: int, member_id: int, next_submission_time: datetime, last_submission: str
-):
+def update_member_submission(guild_id: int, member_id: int, last_submission: str):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
             return members.update_submission(
-                cursor, guild_id, member_id, next_submission_time, last_submission
+                cursor, guild_id, member_id, last_submission
             )
 
+def update_cooldown(guild_id: int, member_id: int, next_submission_time: datetime):
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return members.set_cooldown(
+                cursor, guild_id, member_id, next_submission_time
+            )
 
 def cooldown_reset(guild_id: int, member_id: int):
     with psycopg.connect(
