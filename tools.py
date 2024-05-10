@@ -71,7 +71,7 @@ def generate_guild_card_embed(db_member, db_guild, rank):
     else:
         timestamp_next_request = db_member[members.NEXT_SUBMISSION_TIME].timestamp()
         timestamp_string = f"<t:{int(timestamp_next_request)}>"
-    cooldown = EmbedField(name="Cooldown", value=timestamp_string, inline=True)
+    cooldown = EmbedField(name="Cooldown until", value=timestamp_string, inline=True)
     embed = Embed(
         color=PURPLE,
         title=f"Guild card for {db_member[members.NICKNAME]}",
@@ -179,6 +179,12 @@ def calculate_next_submission_time(previous_next, cooldown):
         previous_next = datetime.now()
     return datetime.fromtimestamp(
         previous_next.timestamp() + ONE_HOUR * float(cooldown)
+    )
+
+def calculate_prev_submission_time(previous_next, cooldown):
+    """Gives the datetime of the next allowed submission"""
+    return datetime.fromtimestamp(
+        previous_next.timestamp() - ONE_HOUR * float(cooldown)
     )
 
 
