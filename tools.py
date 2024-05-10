@@ -87,6 +87,7 @@ def requests_content(guild_id, request_type):
     req_type = ord_requests.get("type")
     if len(req_type) < 1:
         return [Embed(title="No result", description=f"Couldn't find any {request_type}")]
+    req_type = req_type[0]
     name_chunks = chunk(ord_requests["name"], size_chunk)
     effect_chunks = chunk(ord_requests["effect"], size_chunk)
     val_str = [f"{element}" for element in ord_requests["value"]]# Convert to strings
@@ -112,7 +113,7 @@ def requests_content(guild_id, request_type):
         )
         embed = Embed(
             color=PINK,
-            title=f"List of the {req_type}",
+            title=f"Available {req_type}",
             fields=[req_name, req_effect, req_value],
         )
         embeds.append(embed)
