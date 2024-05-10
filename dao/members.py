@@ -42,11 +42,14 @@ def select(cursor, guild_id, member_id):
         [guild_id, member_id])
     return cursor.fetchone()
 
-def rank(cursor, guild_id, member_id):
-    cursor.execute(
-        ";WITH cte AS("
-        f"SELECT id, ROW_NUMBER() OVER(ORDER BY points DESC) rank FROM {TABLE_NAME} where guild=%s "
-        ")"
-        "SELECT rank from cte WHERE id=%s",
-        [guild_id, member_id])
-    return cursor.fetchone()
+def rank(cursor, guild_id, member_id = None):
+    req = (";WITH cte AS("
+        f"SELECT ROW_NUMBER() OVER(ORDER BY points DESC) rank, id, nickname, points FROM {TABLE_NAME} "
+        "WHERE guild=%s) "
+        "SELECT rank, id, nickname, points FROM cte ")
+    parm = [guild_id]
+    if member_id is not None:
+        req = f"{req}WHERE id=%s "
+        parm.insert(len(parm), member_id)
+    cursor.execute(req,parm)
+    return cursor.fetchall()

@@ -24,6 +24,8 @@ ONE_HOUR = 3600
 PURPLE = "#7f03fc"
 AQUAMARINE = "#00edd9"
 PINK = "#ff66b0"
+GOLD = "#ffc400"
+SILVER = "#7c95a1"
 
 
 def get_denial_reason_modal():
@@ -81,7 +83,7 @@ def generate_guild_card_embed(db_member, db_guild, rank):
 
 
 def requests_content(guild_id, request_type):
-    """Format the requests in a string"""
+    """Format the requests in embeds"""
     size_chunk = 15
     ord_requests = request_per_column(guild_id, request_type)
     req_type = ord_requests.get("type")
@@ -118,6 +120,76 @@ def requests_content(guild_id, request_type):
         )
         embeds.append(embed)
     return embeds
+
+
+def generate_leaderboard(db_leaderboard, currency):
+    """Generate a leaderboard in a list of embeds to be paginated"""
+    chunk_size = 15
+    embeds = []
+    ranks, names, points = [], [], []
+    for i, member_rank in enumerate(db_leaderboard):
+        ranks.append(member_rank[0])
+        names.append(member_rank[2])
+        points.append(member_rank[3])
+        if i == 2:
+            embeds.append(generate_podium(names, points, currency))
+            ranks, names, points = [], [], []
+        elif (i - 2) % chunk_size == 0:
+            embeds.append(generate_rank_embeds(ranks, names, points, currency))
+            ranks, names, points = [], [], []
+    if len(ranks) > 0:
+        embeds.append(generate_rank_embeds(ranks, names, points, currency))
+    return embeds
+
+
+def generate_podium(names, points, currency):
+    """Generate a page of the leaderboard"""
+    number_1 = EmbedField(
+        name=f"🥇 {names[0]}",
+        value=f"Leading with {points[0]} {currency}",
+    )
+    number_2 = EmbedField(
+        name=f"🥈 {names[1]}",
+        value=f"Close with {points[1]} {currency}",
+    )
+    number_3 = EmbedField(
+        name=f"🥉 {names[2]}",
+        value=f"Keeping up with {points[2]} {currency}",
+    )
+    embed = Embed(
+        color=GOLD,
+        title="Podium",
+        fields=[number_1, number_2, number_3],
+    )
+    return embed
+
+
+def generate_rank_embeds(ranks, names, points, currency):
+    """Generate a page of the leaderboard"""
+    rank_str = [f"{element}" for element in ranks]# Convert to strings
+    point_str = [f"{element}" for element in points]
+    rank_embed = EmbedField(
+        name="Rank",
+        value="\n".join(rank_str),
+        inline=True,
+    )
+    name_embed = EmbedField(
+        name="Name",
+        value="\n".join(names),
+        inline=True,
+    )
+    points_embed = EmbedField(
+        name=currency.capitalize(),
+        value="\n".join(point_str),
+        inline=True,
+    )
+    embed = Embed(
+        color=SILVER,
+        title="Leaderboard",
+        fields=[rank_embed, name_embed, points_embed],
+    )
+    return embed
+
 
 def chunk(elements, size):
     """Divides a list into smaller lists of specified size"""
