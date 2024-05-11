@@ -8,8 +8,6 @@ from interactions import (
     Client,
     Intents,
     listen,
-    SlashCommand,
-    SlashCommandOption,
     SlashCommandChoice,
     slash_command,
     slash_option,
@@ -20,6 +18,8 @@ from interactions import (
     Role,
     ChannelType,
     BaseChannel,
+    AutocompleteContext,
+    global_autocomplete,
 )
 from interactions.api.events import MessageCreate, Component
 from interactions.ext.paginators import Paginator
@@ -27,6 +27,7 @@ import dao
 import business
 import tools
 import update
+import auto_complete
 
 # Inititialization
 logging.basicConfig()
@@ -37,32 +38,21 @@ TOKEN = os.environ.get("token")
 intents = Intents.MESSAGE_CONTENT | Intents.GUILD_MESSAGES | Intents.GUILDS
 
 IS_UPDATED = update.run_updates()
-IS_UPDATED = True #TODO: Remove this, crutch because callbacks have to be remade
 bot = Client(intents=intents, delete_unused_application_cmds=IS_UPDATED)
 
 
-# Per guild requests, registered manually see guild_commands
-def generate_request_list_cmd(guild_id, types_choices):
-    """request_list command depending on the available request types"""
-    request_list_cmd = SlashCommand(
-        name="request_list",
-        description="List all the requests",
-        scopes=[str(guild_id)],
-        default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
-        options=[
-            SlashCommandOption(
-                name="request_type",
-                description="Type of the request",
-                type=OptionType.STRING,
-                required=True,
-                choices=types_choices,
-            )
-        ],
-        callback=request_list,
-    )
-    return request_list_cmd
-
-
+@slash_command(
+    name="request_list",
+    description="List all the requests",
+    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+)
+@slash_option(
+    name="request_type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
 async def request_list(ctx: SlashContext, request_type: str):
     """Request list command have been received"""
     # Check input and fetch from database
@@ -78,40 +68,35 @@ async def request_list(ctx: SlashContext, request_type: str):
     return await paginator.send(ctx)
 
 
-def generate_request_delete_cmd(guild_id, types_choices):
-    """request_delete command depending on the available request types"""
-    request_delete_cmd = SlashCommand(
-        name="request_delete",
-        description="Delete a request",
-        scopes=[str(guild_id)],
-        default_member_permissions=Permissions.MANAGE_GUILD,
-        options=[
-            SlashCommandOption(
-                name="request_type",
-                description="Type of the request",
-                type=OptionType.STRING,
-                required=True,
-                choices=types_choices,
-            ),
-            SlashCommandOption(
-                name="name",
-                description="Name of the request",
-                type=OptionType.STRING,
-                required=True,
-            ),
-            SlashCommandOption(
-                name="effect",
-                description="Effect of the request",
-                type=OptionType.STRING,
-                required=True,
-            ),
-        ],
-        callback=request_delete,
-    )
-    return request_delete_cmd
-
-
-async def request_delete(ctx: SlashContext, request_type: str, name: str, effect: str):
+@slash_command(
+    name="request_delete",
+    description="Delete a request",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="request_type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="request_name",
+    description="Name of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="request_effect",
+    description="Effect of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+async def request_delete(
+    ctx: SlashContext, request_type: str, request_name: str, request_effect: str
+):
     """Request delete command have been received"""
     # Check input and fetch from database
     guild_error = tools.check_in_guild(ctx)
@@ -121,37 +106,11 @@ async def request_delete(ctx: SlashContext, request_type: str, name: str, effect
     if not is_setup:
         return await ctx.send(error)
     # Business
-    dao.dao.request_delete(ctx.guild.id, request_type, name, effect)
+    dao.dao.request_delete(ctx.guild.id, request_type, request_name, request_effect)
     # Respond
-    return await ctx.send(f"{request_type} {name} with effect {effect} removed")
-
-
-def get_guild_commands(guilds):
-    """Get all the guild commands to be registered in the guild scope"""
-    scopes = []
-    commands = []
-    for guild in guilds:
-        db_types = [
-            req[dao.requests.REQUEST_TYPE] for req in dao.dao.get_requests(guild)
-        ]
-        db_types = list(dict.fromkeys(db_types))
-        types_choices = list(
-            SlashCommandChoice(name=element, value=element) for element in db_types
-        )
-        if len(types_choices) > 0:
-            scope = guild
-            commands.append(generate_request_list_cmd(scope, types_choices))
-            commands.append(generate_request_delete_cmd(scope, types_choices))
-            scopes.append(scope)
-    return [scopes, commands]
-
-
-async def register_guild_commands(guilds):
-    """Register all the guild commands to discord"""
-    scopes, commands = get_guild_commands(guilds)
-    for command in commands:
-        bot.add_interaction(command)
-    await bot.synchronise_interactions(scopes=scopes)
+    return await ctx.send(
+        f"{request_type} {request_name} with effect {request_effect} removed"
+    )
 
 
 @listen()  # this decorator tells snek that it needs to listen for the corresponding event
@@ -160,9 +119,6 @@ async def on_ready():
     # pylint:disable=W0603
     logger.info("This bot is owned by %s", bot.owner)
     if IS_UPDATED:
-        # Register all the guild specific commands
-        guild_ids = [guild.id for guild in bot.guilds]
-        await register_guild_commands(guild_ids)
         logger.info("Update finished")
     else:
         logger.info("Bot up to date")
@@ -325,6 +281,7 @@ async def card(ctx: SlashContext, member: Member = None):
         embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
     )
 
+
 @slash_command(
     name="leaderboard",
     description="Show the guild card for the specified member",
@@ -338,12 +295,12 @@ async def leaderboard(ctx: SlashContext):
         return await ctx.send(guild_error)
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
-        return await ctx.send(
-            db_guild
-        )
+        return await ctx.send(db_guild)
     # Business
     db_leaderboard = dao.dao.get_leaderboard(ctx.guild.id)
-    request_embeds = tools.generate_leaderboard(db_leaderboard, db_guild[dao.guilds.CURRENCY])
+    request_embeds = tools.generate_leaderboard(
+        db_leaderboard, db_guild[dao.guilds.CURRENCY]
+    )
     paginator = Paginator.create_from_embeds(bot, *request_embeds)
     return await paginator.send(ctx)
 
@@ -386,18 +343,21 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     description="Type of the request",
     opt_type=OptionType.STRING,
     required=True,
+    autocomplete=True,
 )
 @slash_option(
-    name="name",
+    name="request_name",
     description="Name of the request",
     opt_type=OptionType.STRING,
     required=True,
+    autocomplete=True,
 )
 @slash_option(
-    name="effect",
+    name="request_effect",
     description="Effect of the request",
     opt_type=OptionType.STRING,
     required=True,
+    autocomplete=True,
 )
 @slash_option(
     name="value",
@@ -491,14 +451,14 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
 #    required=True,
 # )
 @slash_option(
-   name="condition",
-   description="Condition for awarding reward",
-   required=True,
-   opt_type=OptionType.STRING,
-   choices=[
+    name="condition",
+    description="Condition for awarding reward",
+    required=True,
+    opt_type=OptionType.STRING,
+    choices=[
         SlashCommandChoice(name="Bought", value="bought"),
-        SlashCommandChoice(name="Milestone", value="milestone")
-    ]
+        SlashCommandChoice(name="Milestone", value="milestone"),
+    ],
 )
 @slash_option(
     name="reward",
@@ -512,7 +472,9 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     required=True,
     opt_type=OptionType.INTEGER,
 )
-async def reward_add(ctx: SlashContext, condition: str, reward: Role, points_required: int):
+async def reward_add(
+    ctx: SlashContext, condition: str, reward: Role, points_required: int
+):
     """Add a reward that users can get when gaining points"""
     # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
     guild_error = tools.check_in_guild(ctx)
@@ -521,7 +483,7 @@ async def reward_add(ctx: SlashContext, condition: str, reward: Role, points_req
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.add_reward(ctx, reward, points_required, condition = condition)
+    return await business.add_reward(ctx, reward, points_required, condition=condition)
 
 
 @slash_command(
@@ -530,14 +492,14 @@ async def reward_add(ctx: SlashContext, condition: str, reward: Role, points_req
     default_member_permissions=Permissions.MANAGE_GUILD,
 )
 @slash_option(
-   name="condition",
-   description="Condition for awarding reward",
-   required=True,
-   opt_type=OptionType.STRING,
-   choices=[
+    name="condition",
+    description="Condition for awarding reward",
+    required=True,
+    opt_type=OptionType.STRING,
+    choices=[
         SlashCommandChoice(name="Bought", value="bought"),
-        SlashCommandChoice(name="Milestone", value="milestone")
-    ]
+        SlashCommandChoice(name="Milestone", value="milestone"),
+    ],
 )
 @slash_option(
     name="reward",
@@ -554,7 +516,9 @@ async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.remove_reward(ctx, reward, condition = condition) # TODO: Respond here instead of in business
+    return await business.remove_reward(
+        ctx, reward, condition=condition
+    )  # TODO: Respond here instead of in business
 
 
 @slash_command(
@@ -577,8 +541,55 @@ async def generate_shop(ctx: SlashContext):
     for kvp in res.items():
         messages = kvp[1]
         for message in messages:
-            await channel.send(content = message["content"], components = message["components"])
+            await channel.send(
+                content=message["content"], components=message["components"]
+            )
     return await ctx.send(content="Shop have been generated")
+
+
+@global_autocomplete("request_type")
+async def autocomplete_request_type(ctx: AutocompleteContext):
+    """Autocompletes for all the types in the guild"""
+    if ctx.guild is None:
+        return await ctx.send([])
+    string_option_input = ctx.input_text  # can be empty/None
+    options = auto_complete.get_cache_request_options(
+        ctx.guild.id
+    )
+    return await ctx.send(
+        choices=auto_complete.autocomplete_from_options(options, string_option_input)
+    )
+
+
+@global_autocomplete("request_name")
+async def autocomplete_request_name(ctx: AutocompleteContext):
+    """Autocompletes for all the names in the guild"""
+    if ctx.guild is None:
+        return await ctx.send([])
+    string_option_input = ctx.input_text  # can be empty/None
+    request_type = ctx.kwargs.get("request_type")
+    options = auto_complete.get_cache_request_options(
+        ctx.guild.id, request_type=request_type
+    )
+    return await ctx.send(
+        choices=auto_complete.autocomplete_from_options(options, string_option_input)
+    )
+
+
+@global_autocomplete("request_effect")
+async def autocomplete_request_effect(ctx: AutocompleteContext):
+    """Autocompletes for all the effects in the guild"""
+    if ctx.guild is None:
+        return await ctx.send([])
+    string_option_input = ctx.input_text  # can be empty/None
+    request_type = ctx.kwargs.get("request_type")
+    request_name = ctx.kwargs.get("request_name")
+    options = auto_complete.get_cache_request_options(
+        ctx.guild.id, request_type=request_type, name=request_name
+    )
+    return await ctx.send(
+        choices=auto_complete.autocomplete_from_options(options, string_option_input)
+    )
 
 
 bot.start(TOKEN)
