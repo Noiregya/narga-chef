@@ -253,6 +253,7 @@ def calculate_next_submission_time(previous_next, cooldown):
         previous_next.timestamp() + ONE_HOUR * float(cooldown)
     )
 
+
 def calculate_prev_submission_time(previous_next, cooldown):
     """Gives the datetime of the next allowed submission"""
     return datetime.fromtimestamp(
@@ -275,9 +276,9 @@ def request_per_column(guild_id, request_type=None, name=None, effect=None):
     return {"type": request_type, "name": name, "effect": effect, "value": value}
 
 
-def ordered_requests(guid_id, request_type=None, name=None, effect=None):
+def ordered_requests(guild_id, request_type=None, name=None, effect=None):
     """Groups every column in a 3-dimensional dictionnary"""
-    db_requests = dao.get_requests(guid_id, request_type, name, effect)
+    db_requests = dao.get_requests(guild_id, request_type, name, effect)
     all_req = {}
     for request in db_requests:
         type_dict = all_req.get(request[requests.REQUEST_TYPE])

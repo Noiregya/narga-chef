@@ -11,7 +11,6 @@ import dao.requests as requests
 import dao.rewards as rewards
 import tools
 
-ONE_HOUR = 3600
 MAX_OPTIONS = 25
 
 eventDictionnary = {}
