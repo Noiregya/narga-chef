@@ -333,3 +333,4 @@ def generate_shop_items(db_guild, db_rewards):
         reward_nature_list.append(message)
         rewards_per_nature[nature] = reward_nature_list
     return rewards_per_nature
+    

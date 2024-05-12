@@ -353,6 +353,19 @@ async def remove_reward(ctx, reward, condition="milestone", nature="role"):
         f"{nature} {reward_string} obtained through {condition} removed", ephemeral=True
     )
 
+
+def list_rewards(guild_id):
+    """Make a string of all the rewards"""
+    db_rewards = dao.get_rewards(guild_id)
+    rewards_str = "\n".join(f"{rew[rewards.NATURE]};"
+        f"{rew[rewards.CONDITION]};"
+        f"{rew[rewards.REWARD]};"
+        f"{rew[rewards.POINTS_REQUIRED]}" 
+        for rew in db_rewards)
+    return ("Nature ;Condition ;Reward ;Points\n"
+        f"{rewards_str}")
+
+
 async def update_rewards(guild_id, member, current_points):
     """Update the rewards a member deserves"""
     db_rewards = dao.get_rewards(guild_id)

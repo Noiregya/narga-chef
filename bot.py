@@ -522,6 +522,24 @@ async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
 
 
 @slash_command(
+    name="reward_list",
+    description="View all the rewards in the guild",
+    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+)
+async def reward_list(ctx: SlashContext):
+    """Respond with a list of all the rewards currently in the guild"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    rewards_str = business.list_rewards(ctx.guild.id)
+    paginator = Paginator.create_from_string(bot, rewards_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
     name="shop",
     description="Generates a shop in the current channel with all the rewards",
     default_member_permissions=Permissions.MANAGE_GUILD,
