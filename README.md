@@ -15,15 +15,14 @@ The values you must provide are:
 ## Install Image Magick 7
 Image Magick is used to render SVG into png for discord. I couldn't find a way around it.
 ### Linux: 
-sudo apt-get install libmagickwand-dev
+Install imagemagick from sources or binaries
+https://imagemagick.org/script/install-source.php
 ### MacOS
 brew install imagemagick
 ### Windows: 
 * Download and install Image Magick https://imagemagick.org/script/download.php#windows
  * Don't forget to tick the "Install development headers and libraries for X and C++" box
 * Set the environment variable MAGICK_HOME with the install folder ex: C:\Program Files\ImageMagick-7.1.1-Q16-HDRI
-### Other
-https://www.cairographics.org/download/
 
 ## Start the bot
 ./bin/start
