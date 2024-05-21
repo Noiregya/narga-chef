@@ -334,3 +334,12 @@ def generate_shop_items(db_guild, db_rewards):
         rewards_per_nature[nature] = reward_nature_list
     return rewards_per_nature
     
+def human_readable_delta(seconds):
+    res = ""
+    if seconds > 86400:
+        res = f"{seconds//86400} days"
+    if seconds > 3600:
+        res = f"{res} {(seconds//3600) % 24} hrs"
+    if seconds > 60:
+        res = f"{res} {(seconds//60) % 60} min"
+    return f"{res} {seconds % 60} sec"

@@ -28,6 +28,8 @@ import business
 import tools
 import update
 import auto_complete
+import render.render as render
+
 
 # Inititialization
 logging.basicConfig()
@@ -275,11 +277,16 @@ async def card(ctx: SlashContext, member: Member = None):
     if member is None:
         member = ctx.member
     db_member = dao.dao.fetch_member(ctx.guild.id, member.id, member.display_name)
+
     # Business
     rank = dao.dao.get_rank(ctx.guild.id, member.id)
-    return await ctx.send(
-        embed=tools.generate_guild_card_embed(db_member, db_guild, rank)
+    await ctx.defer()
+    image = await business.get_card_image(db_member, db_guild, rank, pfp=member.display_avatar)
+    res = await ctx.send(
+        file=image
     )
+    render.clear_cache(image)
+    return res
 
 
 @slash_command(
@@ -480,10 +487,10 @@ async def reward_add(
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
         return await ctx.send(guild_error)
-    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
-        return await ctx.send(error)
-    return await business.add_reward(ctx, reward, points_required, condition=condition)
+        return await ctx.send(db_guild)
+    return await business.add_reward(ctx, reward, points_required, condition=condition, currency=db_guild[dao.guilds.CURRENCY])
 
 
 @slash_command(
@@ -608,6 +615,5 @@ async def autocomplete_request_effect(ctx: AutocompleteContext):
     return await ctx.send(
         choices=auto_complete.autocomplete_from_options(options, string_option_input)
     )
-
 
 bot.start(TOKEN)

@@ -1,7 +1,8 @@
 """Functions making up the most of the bot's algorithm"""
 
-import logging
+import os
 from datetime import datetime
+import logging
 import psycopg
 from interactions.client.errors import (BotException)
 import dao.dao as dao
@@ -10,6 +11,7 @@ import dao.guilds as guilds
 import dao.requests as requests
 import dao.rewards as rewards
 import tools
+import render.render as render
 
 MAX_OPTIONS = 25
 
@@ -321,7 +323,7 @@ def add_request(ctx, req_type, name, effect, value):
 
 
 async def add_reward(
-    ctx, reward, points_required, condition="milestone", nature="role"
+    ctx, reward, points_required, currency="points", condition="milestone", nature="role"
 ):
     """Adds a new reward"""
     reward_string = f"<@&{reward.id}>"
@@ -335,7 +337,7 @@ async def add_reward(
         )
     return await ctx.send(
         f"{nature} {reward_string} obtained through {condition} with {points_required}"
-        " points added",
+        f" {currency} added",
         ephemeral=True,
     )
     #  ctx.user.add_role(reward, "Milestone reward")
@@ -433,3 +435,30 @@ async def toggle_role_reward(ctx, role_id):
         await ctx.author.add_role(role_id)
         content = f"Role <@&{role_id}> given"
     return content
+
+async def get_card_image(db_member, db_guild, rank, pfp=None):
+    """Get the rendered image of a user's guild card"""
+    currency = db_guild[guilds.CURRENCY]
+    guild_id = db_member[members.GUILD]
+    member_id = db_member[members.ID]
+    points = db_member[members.POINTS]
+    nick = db_member[members.NICKNAME]
+    balance = points - db_member[members.SPENT]
+    next_sub_t = db_member[members.NEXT_SUBMISSION_TIME]
+    #last_sub = db_member[dao.members.LAST_SUBMISSION]
+    png = os.path.abspath(f"render/{guild_id}_{member_id}_card.png")
+    # Replaces image if exists
+    render.clear_cache(png)
+    images = await render.cache_images(guild_id, member_id, pfp_url=pfp)
+
+    if next_sub_t.year is datetime.min.year:
+        next_req_str = "No submission yet"
+    else:
+        delta = round(next_sub_t.timestamp() - datetime.now().timestamp())
+        if delta < 0:
+            next_req_str = "You can submit now"
+        else:
+            next_req_str = f"Submit in: {tools.human_readable_delta(delta)}"
+
+    render.generate_guild_card(png, member_id, nick, currency, balance, points, rank, pfp = images.get("pfp"), next_req_str=next_req_str)
+    return png

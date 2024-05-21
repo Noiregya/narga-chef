@@ -1,1 +1,1 @@
-UPDATE metanarga SET data_model_version = '1.0.4';
+UPDATE metanarga SET data_model_version = '1.0.5';

@@ -12,3 +12,8 @@ out.logs
 pyvenv.cfg
 update
 __pycache__/*
+icon.png
+s_icon.png
+render.svg
+render/*.png
+render/__pycache__/*
