@@ -167,8 +167,6 @@ def snowflake_generator(draw, width, height, seed, color=ACCENT_COLOR):
     draw.stroke_width = 1
 
     step = 0.015 * width
-    s_step = step * 0.1
-    max_len = 18
 
     s_list = list(map(int, str(seed)))
     i = 0
@@ -343,8 +341,8 @@ def apply_mask(image, mask):
         image.composite_channel("alpha", alpha_image, "multiply", 0, 0)
 
 
-def draw_text(
-    draw, x, y, body, color, font_family="undefined", font_size=20, font_weight=0
+def draw_text( #Yu Gothic Light & Yu Gothic UI
+    draw, x, y, body, color, font_family="Meiryo & Meiryo Italic & Meiryo UI & Meiryo UI", font_size=20, font_weight=0
 ):
     draw.push()
     draw.font_family = font_family
