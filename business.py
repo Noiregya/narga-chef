@@ -188,7 +188,7 @@ async def deny_component(ctx, req_member, unique, value):
 
 async def buy_component(ctx, nature, reward_content, cost):
     """A component received when a member tries to buy a reward"""
-    db_member = dao.get_member(ctx.guild.id, ctx.author.id)
+    db_member = dao.fetch_member(ctx.guild.id, ctx.author.id, ctx.author.display_name)
     balance = db_member[members.POINTS] - db_member[members.SPENT]
     if balance >= cost:
         content, error = await award(ctx, nature, reward_content)
@@ -381,11 +381,11 @@ async def update_rewards(guild_id, member, current_points):
                 return
 
 
-async def add_points_listener(guild_ctx, member_id, value, member=None):
+async def add_points_listener(guild_ctx, member_id, value):
     """Business related to adding points"""
     db_member = dao.get_member(guild_ctx.id, member_id)
-    if member is None:
-        member = await guild_ctx.fetch_member(member_id)
+    member = await guild_ctx.fetch_member(member_id)
+    db_member = dao.fetch_member(guild_ctx.id, member_id, member.display_name)
     dao.add_points(guild_ctx.id, db_member[members.ID], value)
     await update_rewards(guild_ctx.id, member, db_member[members.POINTS] + value)
 

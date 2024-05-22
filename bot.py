@@ -414,7 +414,7 @@ async def points_add(ctx: SlashContext, member: Member, points: int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    await business.add_points_listener(ctx.guild, member.id, points, member=member)
+    await business.add_points_listener(ctx.guild, member.id, points)
     return await ctx.send(f"Points added for {member.display_name}")
 
 
@@ -443,7 +443,7 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    await business.add_points_listener(ctx.guild, member.id, -points, member=member)
+    await business.add_points_listener(ctx.guild, member.id, -points)
     return await ctx.send(f"Points subtracted for {member.display_name}")
 
 
