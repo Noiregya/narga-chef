@@ -2,12 +2,15 @@
 
 import os
 import math
+from dotenv import load_dotenv
 import urllib.request
 from wand.image import Image, COMPOSITE_OPERATORS
 from wand.color import Color
 from wand.drawing import Drawing
 from wand.compat import nested
 
+load_dotenv()
+FONT_FAMILY = os.environ.get("font_family")
 # Recommanded size for guild cards: 960x540
 # TEMP_DIR = "render/"
 TEMP_DIR = os.path.abspath("")
@@ -342,7 +345,7 @@ def apply_mask(image, mask):
 
 
 def draw_text( #Yu Gothic Light & Yu Gothic UI
-    draw, x, y, body, color, font_family="Meiryo & Meiryo Italic & Meiryo UI & Meiryo UI", font_size=20, font_weight=0
+    draw, x, y, body, color, font_family=FONT_FAMILY, font_size=20, font_weight=0
 ):
     draw.push()
     draw.font_family = font_family
