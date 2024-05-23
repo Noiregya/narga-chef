@@ -302,20 +302,26 @@ def ordered_requests(guild_id, request_type=None, name=None, effect=None):
     return all_req
 
 
-def generate_shop_items(db_guild, db_rewards):
+def generate_shop_items(db_guild, db_rewards, roles):
     """Generate messages of each of the provided items with interactions to buy them"""
     rewards_per_nature = {}
-    for reward in db_rewards:
+    roles_rewards = []
+    for role in roles:
+        try:
+            reward = next(reward for reward in db_rewards
+                if reward[rewards.NATURE] == 'role'
+                and reward[rewards.REWARD] == role.id)
+            roles_rewards.append(reward)
+        except StopIteration:
+            continue
+    
+    for reward in roles_rewards:
         nature = reward[rewards.NATURE]
         reward_content = reward[rewards.REWARD]
         points = reward[rewards.POINTS_REQUIRED]
         reward_nature_list = rewards_per_nature.get(nature)
         reward_nature_list = [] if reward_nature_list is None else reward_nature_list
-        # get the list to append with the element
-        reward_str = ""
-        match nature:
-            case "role":
-                reward_str =  f"<@&{reward_content}>"
+        reward_str =  f"<@&{reward_content}>"
         message = {
             "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
             "components" : ActionRow(
@@ -335,6 +341,7 @@ def generate_shop_items(db_guild, db_rewards):
     return rewards_per_nature
     
 def human_readable_delta(seconds):
+    """Makes a delta time into an understandable string"""
     res = ""
     if seconds > 86400:
         res = f"{seconds//86400} days"

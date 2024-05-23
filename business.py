@@ -390,11 +390,11 @@ async def add_points_listener(guild_ctx, member_id, value):
     await update_rewards(guild_ctx.id, member, db_member[members.POINTS] + value)
 
 
-def generate_shop(db_guild):
+def generate_shop(db_guild, roles):
     """Generate all the components to send to make the shop"""
     # Makes new shop
     guild_rewards = dao.get_rewards(db_guild[guilds.ID], condition="bought")
-    return tools.generate_shop_items(db_guild, guild_rewards)
+    return tools.generate_shop_items(db_guild, guild_rewards, roles)
 
 
 async def award(ctx, nature, reward_content):

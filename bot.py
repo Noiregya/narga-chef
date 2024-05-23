@@ -559,8 +559,9 @@ async def generate_shop(ctx: SlashContext):
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    # business.clean_shop(db_guild)
-    res = business.generate_shop(db_guild)
+
+    roles = ctx.guild.roles
+    res = business.generate_shop(db_guild, roles)
     channel = ctx.channel
     await ctx.defer(ephemeral=True)
     for kvp in res.items():
