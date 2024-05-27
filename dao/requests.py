@@ -1,10 +1,11 @@
 """Requests table"""
 TABLE_NAME = "requests"
 GUILD = 0
-REQUEST_TYPE = 1
-REQUEST_NAME = 2
-EFFECT = 3
-VALUE = 4
+IDENT = 1
+REQUEST_TYPE = 2
+REQUEST_NAME = 3
+EFFECT = 4
+VALUE = 5
 
 # The nickname column is only used for looking at the database directly, it will never be used in the business
 def insert(cursor, guild, request_type, request_name, effect, value):
@@ -20,14 +21,17 @@ def delete(cursor, guild, request_type, request_name, effect):
         [guild, request_type, request_name, effect])
 
 def selectOne(cursor, guild, request_type, request_name, effect):
-    cursor.execute(f"SELECT guild, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s AND request_type=%s AND request_name=%s AND effect=%s",
+    cursor.execute(f"SELECT guild, ident, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s AND request_type=%s AND request_name=%s AND effect=%s",
         [guild, request_type, request_name, effect])
     return cursor.fetchone()
 
 # A select with optionnal name and effect
-def select(cursor, guild, request_type = None, request_name = None, effect = None):
-    req = f"SELECT guild, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s "
+def select(cursor, guild, ident = None, request_type = None, request_name = None, effect = None, list_ident = None):
+    req = f"SELECT guild, ident, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s "
     parm = []
+    if(ident != None):
+        req = f"{req}AND ident=%s "
+        parm.insert(len(parm),ident)
     if(request_type != None):
         req = f"{req}AND request_type=%s "
         parm.insert(len(parm),request_type)
@@ -37,6 +41,9 @@ def select(cursor, guild, request_type = None, request_name = None, effect = Non
     if(effect != None):
         req = f"{req}AND effect=%s "
         parm.insert(len(parm),effect)
+    if(list_ident != None):
+        req = f"{req}AND ident=ANY(%s) "
+        parm.insert(len(parm),list_ident)
     parm.insert(0, guild)
-    cursor.execute(req,parm)
+    cursor.execute(req, parm)
     return cursor.fetchall()
