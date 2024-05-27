@@ -249,7 +249,9 @@ async def on_component(event: Component):
         case ["effect", *_]:
             req_member, unique = [p1, p2]
             effect = ctx.values[0]
-            return await business.effect_component(ctx, effect, req_member, unique)
+            return await business.effect_component(
+                ctx, effect, event_type, req_member, unique
+            )
         case ["accept", *_]:
             req_member, unique, value = [p1, p2, int(p3)]
             return await business.accept_component(ctx, req_member, unique, value)

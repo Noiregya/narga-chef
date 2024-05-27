@@ -95,12 +95,14 @@ async def name_component(ctx, name, event_type, req_member, unique):
     )
 
 
-async def effect_component(ctx, effect, req_member, unique):
+async def effect_component(ctx, effect, event_type, req_member, unique):
     """A component indicating the effect of request that have been received"""
     image_string = eventDictionnary.get(f"image,{req_member},{unique}")
     request_type = eventDictionnary.get(f"type,{req_member},{unique}")
-    if image_string is not None and request_type is not None:
-        name = eventDictionnary.get(f"name,{req_member},{unique}")
+    name = eventDictionnary.get(f"name,{req_member},{unique}")
+
+    if image_string is not None and request_type is not None and name is not None:
+        eventDictionnary[f"{event_type},{req_member},{unique}"] = effect
         images = image_string.split(";")
         content = await send_to_review(ctx, images, request_type, name, effect, unique)
         return await ctx.edit_origin(
@@ -198,7 +200,7 @@ async def buy_component(ctx, nature, ident, cost):
     db_member = dao.fetch_member(ctx.guild.id, ctx.author.id, ctx.author.display_name)
     balance = db_member[members.POINTS] - db_member[members.SPENT]
     if balance >= cost:
-        content, error = await award(ctx, ident)
+        content, error = await award_reward(ctx, ident)
         if error:
             return content
         dao.add_spent(ctx.guild.id, ctx.author.id, cost)
@@ -462,7 +464,7 @@ def generate_shop(db_guild, roles):
     return tools.generate_shop_items(db_guild, guild_rewards, roles)
 
 
-async def award(ctx, ident):
+async def award_reward(ctx, ident):
     """Award a reward to a member"""
     content = None
     error = False
