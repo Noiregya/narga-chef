@@ -65,8 +65,97 @@ async def request_list(ctx: SlashContext, request_type: str):
     if not is_setup:
         return await ctx.send(error)
     # Business
-    request_embeds = tools.requests_content(ctx.guild.id, request_type)
-    paginator = Paginator.create_from_embeds(bot, *request_embeds)
+    request_str = business.list_requests(ctx.guild.id, request_type)
+    paginator = Paginator.create_from_string(bot, request_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
+    name="complete_request",
+    description="Complete a request for a user",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to complete the request for",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="request_type",
+    description="Type of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="request_name",
+    description="Name of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="request_effect",
+    description="Effect of the request",
+    opt_type=OptionType.STRING,
+    autocomplete=True,
+    required=True,
+)
+async def complete_request(
+    ctx: SlashContext,
+    member: Member,
+    request_type: str,
+    request_name: str,
+    request_effect: str,
+):
+    """Complete request command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    return await ctx.send(
+        business.award_request(
+            ctx.guild.id,
+            member.id,
+            request_type=request_type,
+            request_name=request_name,
+            request_effect=request_effect,
+        )
+    )
+
+
+@slash_command(
+    name="request_completed",
+    description="See what requests a user have completed",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to look at",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+async def request_completed(
+    ctx: SlashContext,
+    member: Member,
+):
+    """Request completed command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    request_attr_str = business.list_request_completed(ctx.guild.id, member.id)
+    paginator = Paginator.create_from_string(bot, request_attr_str, page_size=1000)
     return await paginator.send(ctx)
 
 
@@ -168,8 +257,8 @@ async def on_component(event: Component):
             req_member, unique, value = [p1, p2, int(p3)]
             return await business.deny_component(ctx, req_member, unique, value)
         case ["buy", *_]:
-            nature, reward_content, cost = [p1, p2, int(p3)]
-            res = await business.buy_component(ctx, nature, reward_content, cost)
+            nature, ident, cost = [p1, p2, int(p3)]
+            res = await business.buy_component(ctx, nature, ident, cost)
             return await ctx.send(content=res, ephemeral=True)
         case ["toggle", *_]:
             nature, reward_content = [p1, p2]
@@ -281,10 +370,10 @@ async def card(ctx: SlashContext, member: Member = None):
     # Business
     rank = dao.dao.get_rank(ctx.guild.id, member.id)
     await ctx.defer()
-    image = await business.get_card_image(db_member, db_guild, rank, pfp=member.display_avatar)
-    res = await ctx.send(
-        file=image
+    image = await business.get_card_image(
+        db_member, db_guild, rank, pfp=member.display_avatar
     )
+    res = await ctx.send(file=image)
     render.clear_cache(image)
     return res
 
@@ -490,7 +579,13 @@ async def reward_add(
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    return await business.add_reward(ctx, reward, points_required, condition=condition, currency=db_guild[dao.guilds.CURRENCY])
+    return await business.add_reward(
+        ctx,
+        reward,
+        points_required,
+        condition=condition,
+        currency=db_guild[dao.guilds.CURRENCY],
+    )
 
 
 @slash_command(
@@ -579,9 +674,7 @@ async def autocomplete_request_type(ctx: AutocompleteContext):
     if ctx.guild is None:
         return await ctx.send([])
     string_option_input = ctx.input_text  # can be empty/None
-    options = auto_complete.get_cache_request_options(
-        ctx.guild.id
-    )
+    options = auto_complete.get_cache_request_options(ctx.guild.id)
     return await ctx.send(
         choices=auto_complete.autocomplete_from_options(options, string_option_input)
     )
@@ -616,5 +709,6 @@ async def autocomplete_request_effect(ctx: AutocompleteContext):
     return await ctx.send(
         choices=auto_complete.autocomplete_from_options(options, string_option_input)
     )
+
 
 bot.start(TOKEN)
