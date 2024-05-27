@@ -82,46 +82,6 @@ def generate_guild_card_embed(db_member, db_guild, rank):
     return embed
 
 
-def requests_content(guild_id, request_type):
-    """Format the requests in embeds"""
-    size_chunk = 15
-    ord_requests = request_per_column(guild_id, request_type)
-    req_type = ord_requests.get("type")
-    if len(req_type) < 1:
-        return [Embed(title="No result", description=f"Couldn't find any {request_type}")]
-    req_type = req_type[0]
-    name_chunks = chunk(ord_requests["name"], size_chunk)
-    effect_chunks = chunk(ord_requests["effect"], size_chunk)
-    val_str = [f"{element}" for element in ord_requests["value"]]# Convert to strings
-    value_chunks = chunk(val_str, size_chunk)
-    embeds = []
-    #pylint: disable=C0200
-    #I'm not doing an enum here it makes no sense
-    for i in range(len(name_chunks)):
-        req_name = EmbedField(
-            name="Name",
-            value="\n".join(name_chunks[i]),
-            inline=True,
-        )
-        req_effect = EmbedField(
-            name="Effect",
-            value="\n".join(effect_chunks[i]),
-            inline=True,
-        )
-        req_value = EmbedField(
-            name="Value",
-            value="\n".join(value_chunks[i]),
-            inline=True,
-        )
-        embed = Embed(
-            color=PINK,
-            title=f"Available {req_type}",
-            fields=[req_name, req_effect, req_value],
-        )
-        embeds.append(embed)
-    return embeds
-
-
 def generate_leaderboard(db_leaderboard, currency):
     """Generate a leaderboard in a list of embeds to be paginated"""
     chunk_size = 15
@@ -318,6 +278,7 @@ def generate_shop_items(db_guild, db_rewards, roles):
     for reward in roles_rewards:
         nature = reward[rewards.NATURE]
         reward_content = reward[rewards.REWARD]
+        ident = reward[rewards.IDENT]
         points = reward[rewards.POINTS_REQUIRED]
         reward_nature_list = rewards_per_nature.get(nature)
         reward_nature_list = [] if reward_nature_list is None else reward_nature_list
@@ -328,11 +289,11 @@ def generate_shop_items(db_guild, db_rewards, roles):
                 Button(
                     style=ButtonStyle.GREEN,
                     label="Buy",
-                    custom_id=f"buy,{nature},{reward_content},{points}",
+                    custom_id=f"buy,{nature},{ident},{points}",
                 ),Button(
                     style=ButtonStyle.BLUE,
                     label="Toggle",
-                    custom_id=f"toggle,{nature},{reward_content},none",
+                    custom_id=f"toggle,{nature},{ident},none",
                 )
             )
         }

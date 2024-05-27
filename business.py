@@ -4,12 +4,13 @@ import os
 from datetime import datetime
 import logging
 import psycopg
-from interactions.client.errors import (BotException)
+from interactions.client.errors import BotException
 import dao.dao as dao
 import dao.members as members
 import dao.guilds as guilds
 import dao.requests as requests
 import dao.rewards as rewards
+import dao.request_attr as request_attr
 import tools
 import render.render as render
 
@@ -48,7 +49,7 @@ async def image_received(ctx, images):
     eventDictionnary[f"image,{author.id},{ctx.message.id}"] = image_string
     eventDictionnary[f"users,{author.id},{ctx.message.id}"] = user_ids
     type_list = tools.request_per_column(guild.id)["type"]
-    type_list = list(dict.fromkeys(type_list))# Remove doubles
+    type_list = list(dict.fromkeys(type_list))  # Remove doubles
     if len(type_list) == 0:
         return await ctx.send("Please start by registering requests for this guild")
     return await ctx.message.reply(
@@ -65,7 +66,7 @@ async def type_component(ctx, request_type, event_type, req_member, unique):
     name_list = tools.request_per_column(ctx.guild.id, request_type=request_type)[
         "name"
     ]
-    name_list = list(dict.fromkeys(name_list))# Remove doubles
+    name_list = list(dict.fromkeys(name_list))  # Remove doubles
     if len(name_list) == 0:
         return await ctx.send(f"Could not find any {request_type}")
     return await ctx.edit_origin(
@@ -83,7 +84,7 @@ async def name_component(ctx, name, event_type, req_member, unique):
     effect_list = tools.request_per_column(
         ctx.guild.id, request_type=request_type, name=name
     )["effect"]
-    effect_list = list(dict.fromkeys(effect_list))# Remove doubles
+    effect_list = list(dict.fromkeys(effect_list))  # Remove doubles
     if len(effect_list) == 0:
         return await ctx.send(f"Could not find an effect for this {request_type}")
     return await ctx.edit_origin(
@@ -132,8 +133,13 @@ async def accept_component(ctx, req_member, unique, value):
     member_pings = ""
     for user in users:
         await add_points_listener(ctx.guild, user, value)
-        dao.update_member_submission(
-            ctx.guild.id, user, last_request
+        dao.update_member_submission(ctx.guild.id, user, last_request)
+        award_res = award_request(
+            ctx.guild.id,
+            user,
+            request_type=request_type,
+            request_name=name,
+            request_effect=effect,
         )
         # Send messages
         member_pings = member_pings + f"<@{user}> "
@@ -141,8 +147,9 @@ async def accept_component(ctx, req_member, unique, value):
     clear_events(unique, req_member)
     return await ctx.edit_origin(
         content=(
-            f"Request accepted by <@{ctx.member.id}> and"
-            f" {value} points awarded to {member_pings}\n{image_string}"
+            f"Request accepted by <@{ctx.member.id}>"
+            f"{award_res}\n"
+            f"{value} points awarded to {member_pings}\n{image_string}"
         ),
         components=[],
     )
@@ -186,12 +193,12 @@ async def deny_component(ctx, req_member, unique, value):
     )
 
 
-async def buy_component(ctx, nature, reward_content, cost):
+async def buy_component(ctx, nature, ident, cost):
     """A component received when a member tries to buy a reward"""
     db_member = dao.fetch_member(ctx.guild.id, ctx.author.id, ctx.author.display_name)
     balance = db_member[members.POINTS] - db_member[members.SPENT]
     if balance >= cost:
-        content, error = await award(ctx, nature, reward_content)
+        content, error = await award(ctx, ident)
         if error:
             return content
         dao.add_spent(ctx.guild.id, ctx.author.id, cost)
@@ -199,10 +206,11 @@ async def buy_component(ctx, nature, reward_content, cost):
         content = f"Not enough funds, cost: {cost} balance: {balance}"
     return content
 
-async def toggle_component(ctx, nature, reward_content):
+
+async def toggle_component(ctx, nature, role_id):
     """A component received when a member tries to toggle a reward"""
     if nature == "role":
-        content = await toggle_role_reward(ctx, reward_content)
+        content = await toggle_role_reward(ctx, role_id)
     if content is None:
         content = f"Could not toggle {nature}"
     return content
@@ -317,13 +325,16 @@ def add_request(ctx, req_type, name, effect, value):
             f"Could not add {req_type} {name} with effect {effect}"
             " please check that it doesn't already exists"
         )
-    return (
-        f"{req_type} {name} with effect {effect} and value {value} added"
-    )
+    return f"{req_type} {name} with effect {effect} and value {value} added"
 
 
 async def add_reward(
-    ctx, reward, points_required, currency="points", condition="milestone", nature="role"
+    ctx,
+    reward,
+    points_required,
+    currency="points",
+    condition="milestone",
+    nature="role",
 ):
     """Adds a new reward"""
     reward_string = f"<@&{reward.id}>"
@@ -359,22 +370,76 @@ async def remove_reward(ctx, reward, condition="milestone", nature="role"):
 def list_rewards(guild_id):
     """Make a string of all the rewards"""
     db_rewards = dao.get_rewards(guild_id)
-    rewards_str = "\n".join(f"{rew[rewards.NATURE]};"
+    rewards_str = "\n".join(
+        f"{rew[rewards.IDENT]};"
+        f"{rew[rewards.NATURE]};"
         f"{rew[rewards.CONDITION]};"
         f"{rew[rewards.REWARD]};"
-        f"{rew[rewards.POINTS_REQUIRED]}" 
-        for rew in db_rewards)
-    return ("Nature ;Condition ;Reward ;Points\n"
-        f"{rewards_str}")
+        f"{rew[rewards.POINTS_REQUIRED]}"
+        for rew in db_rewards
+    )
+    return "Id ;Nature ;Condition ;Reward ;Points\n" f"{rewards_str}"
+
+
+def list_requests(guild_id, request_type):
+    """Make a string of all the requests"""
+    db_requests = dao.get_requests(guild_id, request_type=request_type)
+    requests_str = "\n".join(
+        f"{req[rewards.IDENT]};"
+        f"{req[requests.REQUEST_NAME]};"
+        f"{req[requests.EFFECT]};"
+        f"{req[requests.VALUE]}"
+        for req in db_requests
+    )
+    return "Id ;Name; Effect ;Value ;Points\n" f"{requests_str}"
+
+
+def list_request_completed(guild_id, member_id):
+    """Make a string of all the requests that a member completed"""
+    db_request_attr = dao.select_request_attribution(guild_id, member_id)
+    list_ident = [int(row[request_attr.REQUEST]) for row in db_request_attr]
+    db_requests = dao.get_requests(guild_id, list_ident=list_ident)
+    requests_str = "\n".join(
+        f"{req[rewards.IDENT]};"
+        f"{req[requests.REQUEST_NAME]};"
+        f"{req[requests.EFFECT]};"
+        f"{req[requests.VALUE]}"
+        for req in db_requests
+    )
+    return (
+        f"<@{member_id}> has completed the following\n"
+        "Id ;Name; Effect ;Value ;Points\n"
+        f"{requests_str}"
+    )
+
+
+def award_request(
+    guild_id, user_id, request_type=None, request_name=None, request_effect=None
+):
+    """award a request to a user"""
+    db_requests = dao.get_requests(
+        guild_id, request_type=request_type, name=request_name, effect=request_effect
+    )
+    if len(db_requests) == 0:
+        return "It seems that the request no longer exists in the database"
+    db_request = db_requests[0]
+    ident = db_request[requests.IDENT]
+    try:
+        dao.award_request(guild_id, user_id, ident)
+    except psycopg.Error:
+        pass
+    return f"<@{user_id}> is considered as having completed request {ident}"
 
 
 async def update_rewards(guild_id, member, current_points):
     """Update the rewards a member deserves"""
     db_rewards = dao.get_rewards(guild_id)
     for reward in db_rewards:
-        if reward[rewards.CONDITION] == "milestone"\
-            and reward[rewards.NATURE] == "role"\
-            and reward[rewards.POINTS_REQUIRED] <= current_points:
+        if (
+            reward[rewards.CONDITION] == "milestone"
+            and reward[rewards.NATURE] == "role"
+            and reward[rewards.POINTS_REQUIRED] <= current_points
+        ):
             try:
                 await member.add_role(reward[rewards.REWARD], "Milestone reward")
             except BotException:
@@ -397,36 +462,48 @@ def generate_shop(db_guild, roles):
     return tools.generate_shop_items(db_guild, guild_rewards, roles)
 
 
-async def award(ctx, nature, reward_content):
+async def award(ctx, ident):
     """Award a reward to a member"""
     content = None
     error = False
     guild_id = ctx.guild.id
     user_id = ctx.author.id
-    db_award_attr = dao.select_award_attribution(guild_id, user_id, nature, reward_content)
+    db_award_attr = dao.select_award_attribution(guild_id, user_id, ident)
     if len(db_award_attr) > 0:
         error = True
-        content = f"Couldn't give {nature}, you already have it"
+        content = f"Couldn't give this award, you already have it"
         return [content, error]
-    dao.award_reward(guild_id, user_id, nature, reward_content)
-    if nature == "role":
-        await ctx.author.add_role(reward_content)
-        content = f"Role <@&{reward_content}> awarded"
+    dao.award_reward(guild_id, user_id, ident)
+    db_rewards = dao.get_rewards(guild_id, ident=ident)
+    if len(db_rewards) < 1:
+        error = True
+        content = f"Reward number {ident} doesn't exist anymore, ask an admin for help"
+        return [content, error]
+    db_reward = db_rewards[0]
+    if db_reward[dao.rewards.NATURE] == "role":
+        await ctx.author.add_role(db_reward[dao.rewards.REWARD])
+        content = f"Role <@&{db_reward[dao.rewards.REWARD]}> awarded"
     if content is None:
         error = True
-        content = f"Could not award reward for nature {nature}"
+        content = f"Could not award reward {ident}"
     return [content, error]
 
 
-async def toggle_role_reward(ctx, role_id):
+async def toggle_role_reward(ctx, ident):
     """Toggles a role reward"""
     content = None
     guild_id = ctx.guild.id
     user = ctx.author
-    db_award_attr = dao.select_award_attribution(guild_id, user.id, "role", role_id)
+    db_rewards = dao.get_rewards(guild_id, nature="role", ident=ident)
+    if len(db_rewards) == 0:
+        return "This role can't be obtained anymore"
+    db_reward = db_rewards[0]
+    role_id = db_reward[dao.rewards.REWARD]
+    db_award_attr = dao.select_award_attribution(
+        guild_id, user.id, ident
+    )
     if len(db_award_attr) == 0:
-        content = "You haven't earned this reward yet"
-        return content
+        return "You haven't earned this reward yet"
     has_role = user.has_role(role_id)
     if has_role:
         await user.remove_role(role_id)
@@ -435,6 +512,7 @@ async def toggle_role_reward(ctx, role_id):
         await ctx.author.add_role(role_id)
         content = f"Role <@&{role_id}> given"
     return content
+
 
 async def get_card_image(db_member, db_guild, rank, pfp=None):
     """Get the rendered image of a user's guild card"""
@@ -445,7 +523,7 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
     nick = db_member[members.NICKNAME]
     balance = points - db_member[members.SPENT]
     next_sub_t = db_member[members.NEXT_SUBMISSION_TIME]
-    #last_sub = db_member[dao.members.LAST_SUBMISSION]
+    # last_sub = db_member[dao.members.LAST_SUBMISSION]
     png = os.path.abspath(f"render/{guild_id}_{member_id}_card.png")
     # Replaces image if exists
     render.clear_cache(png)
@@ -460,5 +538,15 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
         else:
             next_req_str = f"Submit in: {tools.human_readable_delta(delta)}"
 
-    render.generate_guild_card(png, member_id, nick, currency, balance, points, rank, pfp = images.get("pfp"), next_req_str=next_req_str)
+    render.generate_guild_card(
+        png,
+        member_id,
+        nick,
+        currency,
+        balance,
+        points,
+        rank,
+        pfp=images.get("pfp"),
+        next_req_str=next_req_str,
+    )
     return png
