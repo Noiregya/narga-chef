@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+import json
 import logging
 import psycopg
 from interactions.client.errors import BotException
@@ -11,6 +12,8 @@ import dao.guilds as guilds
 import dao.requests as requests
 import dao.rewards as rewards
 import dao.request_attr as request_attr
+import dao.achievements as achievements
+import dao.achievement_attr as achievement_attr
 import tools
 import render.render as render
 
@@ -473,10 +476,10 @@ async def award_reward(ctx, ident):
     db_award_attr = dao.select_award_attribution(guild_id, user_id, ident)
     if len(db_award_attr) > 0:
         error = True
-        content = f"Couldn't give this award, you already have it"
+        content = "Couldn't give this award, you already have it"
         return [content, error]
     dao.award_reward(guild_id, user_id, ident)
-    db_rewards = dao.get_rewards(guild_id, ident=ident)
+    db_rewards = dao.get_rewards(guild_id, list_ident=ident)
     if len(db_rewards) < 1:
         error = True
         content = f"Reward number {ident} doesn't exist anymore, ask an admin for help"
@@ -496,7 +499,7 @@ async def toggle_role_reward(ctx, ident):
     content = None
     guild_id = ctx.guild.id
     user = ctx.author
-    db_rewards = dao.get_rewards(guild_id, nature="role", ident=ident)
+    db_rewards = dao.get_rewards(guild_id, nature="role", list_ident=ident)
     if len(db_rewards) == 0:
         return "This role can't be obtained anymore"
     db_reward = db_rewards[0]
@@ -514,6 +517,52 @@ async def toggle_role_reward(ctx, ident):
         await ctx.author.add_role(role_id)
         content = f"Role <@&{role_id}> given"
     return content
+
+
+def add_achievement(guild_id, name, image, condition):
+    """Add the following achievement"""
+    is_parsed, conditions = tools.parse_condition(condition)
+    if is_parsed:
+        requests_lst, rewards_lst, points = conditions
+        no_condition = len(requests_lst) == 0 and len(rewards_lst) == 0 and points == 0
+    if not is_parsed or no_condition:
+        return (f"{conditions} you have to specify the following:\n"
+            "requests: A list of request id the member must complete\n"
+            "rewards: A list of rewards id the member must have obtained\n"
+            "points: The number of total points a user must have reached\n"
+            "It must be a json object in the following fashion:\n"
+            "```JSON\n{\"requests\": [1,6,23], \"rewards\": [1,22,34], \"points\": 500}```")
+    if image.content_type.startswith("image") is False:
+        return ("Incorrect attachement for image. Please provide a proper image."
+            "Animated GIFs are not supported. Recommanded size is 48*48.")
+    db_requests = dao.get_requests(guild_id, list_ident=requests_lst)
+    db_rewards = dao.get_rewards(guild_id, list_ident=rewards_lst)
+    missing_req = tools.missing_ident(requests_lst, db_requests, dao.requests.IDENT)
+    missing_rew = tools.missing_ident(rewards_lst, db_rewards, dao.rewards.IDENT)
+    if len(missing_req) > 0 or len(missing_rew) > 0:
+        return ("The following don't exist in the database:\n"
+            f"Requests {missing_req}, Rewards {missing_rew}")
+    json_condition = json.dumps({"requests":requests_lst, "rewards":rewards_lst, "points":points})
+    try:
+        dao.insert_achievement(guild_id, name, image.url, json_condition)
+    except psycopg.Error as e:
+        logging.error(e)
+        return (
+            f"Could not add {name} please check that it doesn't already exists"
+        )
+    return f"Achievement {name} added"
+
+def list_achievements(guild_id):
+    """Make a string of all the achievements"""
+    db_achievements = dao.select_achievements(guild_id)
+    achievements_str = "\n".join(
+        f"{req[achievements.IDENT]};"
+        f"{req[achievements.NAME]};"
+        f"{req[achievements.ICON]};"
+        f"{req[achievements.CONDITION]}"
+        for req in db_achievements
+    ) 
+    return "Id ;Name; Image ;Condition; Points\n" f"{achievements_str}"
 
 
 async def get_card_image(db_member, db_guild, rank, pfp=None):

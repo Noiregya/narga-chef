@@ -10,8 +10,10 @@ import dao.guilds as guilds
 import dao.members as members
 import dao.requests as requests
 import dao.rewards as rewards
+import dao.achievements as achievements
 import dao.reward_attr as reward_attr
 import dao.request_attr as request_attr
+import dao.achievement_attr as achievement_attr
 
 load_dotenv()
 
@@ -228,13 +230,13 @@ def delete_reward(guild_id, condition, nature, reward_id):
             return rewards.delete(cursor, guild_id, condition, nature, reward_id)
 
 
-def get_rewards(guild_id, ident=None, condition=None, nature=None, reward_id=None):
+def get_rewards(guild_id, list_ident=None, condition=None, nature=None, reward_id=None):
     """Selects a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return rewards.select(cursor, guild_id, ident, condition, nature, reward_id)
+            return rewards.select(cursor, guild_id, list_ident, condition, nature, reward_id)
 
 
 def award_reward(guild_id, user_id, reward):
@@ -289,3 +291,20 @@ def select_request_attribution(guild_id, user_id, ident = None):
     ) as connection:
         with connection.cursor() as cursor:
             return request_attr.select(cursor, guild_id, user_id, ident)
+
+def insert_achievement(guild_id, a_name, icon, condition):
+    """Insert a reward in the database"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return achievements.insert(cursor, guild_id, a_name, icon, condition)
+
+
+def select_achievements(guild, ident = None, name = None, icon = None, condition = None):
+    """Selects request attributions"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return achievements.select(cursor, guild, ident , name , icon, condition)

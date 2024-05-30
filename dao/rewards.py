@@ -13,14 +13,14 @@ def insert(cursor, guild, condition, nature, reward, points_required):
         " values(%s, %s, %s, %s, %s)",
         [guild, condition, nature, reward, points_required])
 
-def select(cursor, guild, ident = None, condition = None, nature = None, reward = None):
+def select(cursor, guild, list_ident = None, condition = None, nature = None, reward = None):
     """Select constructed depending on the parameters that's given to it"""
     req = (f"SELECT guild, ident, condition, nature, reward, points_required FROM {TABLE_NAME}"
         " where guild=%s")
     parm = []
-    if ident is not None:
-        req = f"{req}AND ident=%s "
-        parm.insert(len(parm),ident)
+    if(list_ident is not None):
+        req = f"{req}AND ident=ANY(%s) "
+        parm.insert(len(parm),list_ident)
     if condition is not None:
         req = f"{req}AND condition=%s "
         parm.insert(len(parm),condition)

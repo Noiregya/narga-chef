@@ -16,6 +16,7 @@ from interactions import (
     Permissions,
     Member,
     Role,
+    Attachment,
     ChannelType,
     BaseChannel,
     AutocompleteContext,
@@ -640,6 +641,60 @@ async def reward_list(ctx: SlashContext):
         return await ctx.send(error)
     rewards_str = business.list_rewards(ctx.guild.id)
     paginator = Paginator.create_from_string(bot, rewards_str, page_size=1000)
+    return await paginator.send(ctx)
+
+@slash_command(
+    name="achievement_add",
+    description="Add an achievement",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="name",
+    description="Name for the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+@slash_option(
+    name="image",
+    description="Icon for the achievement (48x48px)",
+    required=True,
+    opt_type=OptionType.ATTACHMENT,
+)
+@slash_option(
+    name="condition",
+    description="JSON condition for awarding achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+async def achievement_add(
+    ctx: SlashContext, name: str, image: Attachment, condition: str
+):
+    """Add an achievement"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(db_guild)
+    return await ctx.send(business.add_achievement(ctx.guild.id, name, image, condition),
+        ephemeral=True)
+
+
+@slash_command(
+    name="achievement_list",
+    description="View all the achievements in the guild",
+    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+)
+async def achievement_list(ctx: SlashContext):
+    """Respond with a list of all the achievements currently in the guild"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    achievements_str = business.list_achievements(ctx.guild.id)
+    paginator = Paginator.create_from_string(bot, achievements_str, page_size=1000)
     return await paginator.send(ctx)
 
 
