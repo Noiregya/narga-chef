@@ -359,17 +359,15 @@ async def add_reward(
     #  ctx.user.add_role(reward, "Milestone reward")
 
 
-async def remove_reward(ctx, reward, condition="milestone", nature="role"):
+async def remove_reward(guild_id, reward, condition="milestone", nature="role"):
     """Removes a reward"""
     reward_string = f"<@&{reward.id}>"
     try:
-        dao.delete_reward(ctx.guild.id, condition, nature, reward.id)
+        dao.delete_reward(guild_id, condition, nature, reward.id)
     except psycopg.Error as e:
         logging.error(e)
-        return await ctx.send(f"Could not delete this reward. {e}")
-    return await ctx.send(
-        f"{nature} {reward_string} obtained through {condition} removed", ephemeral=True
-    )
+        return f"Could not delete this reward. {e}"
+    return f"{nature} {reward_string} obtained through {condition} removed"
 
 
 def list_rewards(guild_id):

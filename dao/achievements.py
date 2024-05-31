@@ -33,8 +33,15 @@ def select(cursor, guild, ident = None, a_name = None, icon = None, condition = 
     cursor.execute(req,parm)
     return cursor.fetchall()
 
-def delete(cursor, guild, ident):
+def delete(cursor, guild, ident = None, a_name = None):
     """Delete an element from the database"""
-    cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE "
-        "guild=%s AND ident=ANY(%s)",
-        [guild, ident])
+    req = f"DELETE FROM {TABLE_NAME} WHERE "
+    parm = []
+    parm.insert(0, guild)
+    if ident is not None:
+        req = f"{req}AND ident=ANY(%s) "
+        parm.insert(len(parm),ident)
+    if a_name is not None:
+        req = f"{req}AND ident=%s "
+        parm.insert(len(parm),a_name)
+    cursor.execute(req,parm)

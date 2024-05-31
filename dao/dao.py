@@ -221,7 +221,7 @@ def insert_reward(guild_id, condition, nature, reward_id, points_required):
             )
 
 
-def delete_reward(guild_id, condition, nature, reward_id):
+def delete_reward(guild_id, condition, nature, reward_id, a_name):
     """Delete a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"

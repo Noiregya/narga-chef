@@ -621,9 +621,8 @@ async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.remove_reward(
-        ctx, reward, condition=condition
-    )  # TODO: Respond here instead of in business
+    return await ctx.send(business.remove_reward(
+        ctx.guid.id, reward, condition=condition), ephemeral=True)
 
 
 @slash_command(
