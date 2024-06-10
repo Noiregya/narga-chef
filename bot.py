@@ -16,6 +16,7 @@ from interactions import (
     Permissions,
     Member,
     Role,
+    Attachment,
     ChannelType,
     BaseChannel,
     AutocompleteContext,
@@ -197,7 +198,8 @@ async def request_delete(
     if not is_setup:
         return await ctx.send(error)
     # Business
-    dao.dao.request_delete(ctx.guild.id, request_type, request_name, request_effect)
+    dao.dao.request_delete(ctx.guild.id, request_type = request_type, 
+        request_name = request_name, effect = request_effect)
     # Respond
     return await ctx.send(
         f"{request_type} {request_name} with effect {request_effect} removed"
@@ -620,9 +622,9 @@ async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await business.remove_reward(
-        ctx, reward, condition=condition
-    )  # TODO: Respond here instead of in business
+    return await ctx.send(await business.remove_reward(
+        ctx.guild.id, reward, condition=condition
+        ), ephemeral=True)
 
 
 @slash_command(
@@ -640,6 +642,121 @@ async def reward_list(ctx: SlashContext):
         return await ctx.send(error)
     rewards_str = business.list_rewards(ctx.guild.id)
     paginator = Paginator.create_from_string(bot, rewards_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
+    name="reward_completed",
+    description="See what rewards a user have completed",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to look at",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+async def reward_completed(
+    ctx: SlashContext,
+    member: Member,
+):
+    """Reward completed command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    reward_attr_str = business.list_reward_completed(ctx.guild.id, member.id)
+    paginator = Paginator.create_from_string(bot, reward_attr_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
+    name="request_completed",
+    description="See what requests a user have completed",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to look at",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+async def request_completed(
+    ctx: SlashContext,
+    member: Member,
+):
+    """Request completed command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    request_attr_str = business.list_request_completed(ctx.guild.id, member.id)
+    paginator = Paginator.create_from_string(bot, request_attr_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
+    name="achievement_add",
+    description="Add an achievement",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="name",
+    description="Name for the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+@slash_option(
+    name="image",
+    description="Icon for the achievement (48x48px)",
+    required=True,
+    opt_type=OptionType.ATTACHMENT,
+)
+@slash_option(
+    name="condition",
+    description="JSON condition for awarding achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+async def achievement_add(
+    ctx: SlashContext, name: str, image: Attachment, condition: str
+):
+    """Add an achievement"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(db_guild)
+    res = await business.add_achievement(ctx.guild.id, name, image, condition)
+    return await ctx.send(res, ephemeral=True)
+
+
+@slash_command(
+    name="achievement_list",
+    description="View all the achievements in the guild",
+    default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+)
+async def achievement_list(ctx: SlashContext):
+    """Respond with a list of all the achievements currently in the guild"""
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    achievements_str = business.list_achievements(ctx.guild.id)
+    paginator = Paginator.create_from_string(bot, achievements_str, page_size=1000)
     return await paginator.send(ctx)
 
 

@@ -3,6 +3,7 @@
 # Imports
 import logging
 from datetime import datetime
+import json
 from interactions import (
     Modal,
     ParagraphText,
@@ -311,3 +312,48 @@ def human_readable_delta(seconds):
     if seconds > 60:
         res = f"{res} {(seconds//60) % 60} min"
     return f"{res} {seconds % 60} sec"
+
+def missing_ident(ident_lst, db_lst, ident_index):
+    """Checks if every number in the first list is an ident in the second"""
+    missing = []
+    for i in ident_lst:
+        is_present = False
+        for j in db_lst:
+            is_present = is_present or i == j[ident_index]
+        if not is_present:
+            missing.append(i)
+    return missing
+
+def is_list_of_numbers(str_list):
+    """Check if the list is a list of valid numbers and returns it"""
+    if str_list is None or not isinstance(str_list, list):
+        return (False,"List is missing or malformed")
+    else:
+        int_list = []
+        for string in str_list:
+            if not isinstance(string, int):
+                return (False,"Ids must numbers")
+            int_list.append(int(string))
+    return (True, int_list)
+
+def parse_condition(condition):
+    """Parse a condition serialized object. Not a real JSON parser"""
+    try:
+        json_contents = json.loads(condition)
+    except json.JSONDecodeError:
+        return(False,
+        "Invalid JSON Syntax, make sure that the parameter names are in \"double quotes\",")
+    # We assume there's only one object
+    requests_str = json_contents.get("requests") or []
+    rewards_str = json_contents.get("rewards") or []
+    points = json_contents.get("points") or 0
+    is_list, requests_lst = is_list_of_numbers(requests_str)
+    if not is_list:
+        return (is_list, requests_lst)
+    is_list, rewards_lst = is_list_of_numbers(rewards_str)
+    if not is_list:
+        return (is_list, rewards_lst)
+    if points is None or not isinstance(points, int):
+        return (False, "Points is missing or not a number")
+    return (True, [requests_lst, rewards_lst, points])
+

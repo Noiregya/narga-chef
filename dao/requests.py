@@ -16,9 +16,27 @@ def update(cursor, guild, request_type, request_name, effect, value):
     cursor.execute(f"UPDATE {TABLE_NAME} SET value=%s WHERE guild=%s AND request_type=%s AND request_name=%s AND effect=%s",
         [value, guild, request_type, request_name, effect])
 
-def delete(cursor, guild, request_type, request_name, effect):
-    cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE guild=%s AND request_type=%s AND request_name=%s AND effect=%s",
-        [guild, request_type, request_name, effect])
+def delete(cursor, guild, ident = None, request_type = None, request_name = None, effect = None, list_ident = None):
+    req = f"DELETE FROM {TABLE_NAME} WHERE guild=%s "
+    parm = []
+    if ident is not None:
+        req = f"{req}AND ident=%s "
+        parm.insert(len(parm),ident)
+    if request_type is not None :
+        req = f"{req}AND request_type=%s "
+        parm.insert(len(parm),request_type)
+    if request_name is not None :
+        req = f"{req}AND request_name=%s "
+        parm.insert(len(parm),request_name)
+    if effect is not None :
+        req = f"{req}AND effect=%s "
+        parm.insert(len(parm),effect)
+    if list_ident is not None :
+        req = f"{req}AND ident=ANY(%s) "
+        parm.insert(len(parm),list_ident)
+    parm.insert(0, guild)
+    cursor.execute(req, parm)
+
 
 def selectOne(cursor, guild, request_type, request_name, effect):
     cursor.execute(f"SELECT guild, ident, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s AND request_type=%s AND request_name=%s AND effect=%s",
@@ -29,21 +47,22 @@ def selectOne(cursor, guild, request_type, request_name, effect):
 def select(cursor, guild, ident = None, request_type = None, request_name = None, effect = None, list_ident = None):
     req = f"SELECT guild, ident, request_type, request_name, effect, value FROM {TABLE_NAME} where guild=%s "
     parm = []
-    if(ident != None):
+    if ident is not None:
         req = f"{req}AND ident=%s "
         parm.insert(len(parm),ident)
-    if(request_type != None):
+    if request_type is not None :
         req = f"{req}AND request_type=%s "
         parm.insert(len(parm),request_type)
-    if(request_name != None):
+    if request_name is not None :
         req = f"{req}AND request_name=%s "
         parm.insert(len(parm),request_name)
-    if(effect != None):
+    if effect is not None :
         req = f"{req}AND effect=%s "
         parm.insert(len(parm),effect)
-    if(list_ident != None):
+    if list_ident is not None :
         req = f"{req}AND ident=ANY(%s) "
         parm.insert(len(parm),list_ident)
     parm.insert(0, guild)
     cursor.execute(req, parm)
     return cursor.fetchall()
+    

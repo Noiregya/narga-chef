@@ -1,16 +1,21 @@
 """Renders various graphics"""
 
 import os
+import base64
+from datetime import datetime, timedelta
 import math
+import aiohttp
 from dotenv import load_dotenv
-import urllib.request
-from wand.image import Image, COMPOSITE_OPERATORS
+from wand.image import Image, CHANNELS
+from wand.exceptions import BaseError
 from wand.color import Color
 from wand.drawing import Drawing
 from wand.compat import nested
 
 load_dotenv()
 FONT_FAMILY = os.environ.get("font_family")
+CACHE_DURATION = os.environ.get("cache_duration") or "24"
+CACHE_DURATION = int(CACHE_DURATION)
 # Recommanded size for guild cards: 960x540
 # TEMP_DIR = "render/"
 TEMP_DIR = os.path.abspath("")
@@ -40,11 +45,13 @@ def generate_guild_card(
     balance,
     points,
     rank,
-    achievements=[],
+    achievements=None,
     pfp=None,
     next_req_str=None,
 ):
     """Renders a guild card to a picture"""
+    if achievements is None:
+        achievements = []
     with nested(TRANSPARENT, Color("#000000AA"), Drawing()) as (bg, fg, draw):
         draw.stroke_width = STROKE
         # Background
@@ -132,11 +139,9 @@ def generate_guild_card(
         if pfp is not None:
             image_desc.append(
                 {
-                    "image": pfp,
+                    "path": pfp,
                     "x": WIDTH - ICON_SIZE - MARGIN,
                     "y": MARGIN,
-                    "width": ICON_SIZE,
-                    "height": ICON_SIZE,
                     "outline": TRANSPARENT,
                     "radius": RX,
                 }
@@ -148,18 +153,16 @@ def generate_guild_card(
             array_h = line_h + col * (SMALL_ICON + SPACE)
             image_desc.append(
                 {
-                    "image": achieve_icon,
+                    "blob": achieve_icon,
                     "x": array_w,
                     "y": array_h,
-                    "width": SMALL_ICON,
-                    "height": SMALL_ICON,
                     "outline": TRANSPARENT,
                     "radius": S_RX,
                 }
             )
         with Image(width=WIDTH, height=HEIGHT, background=TRANSPARENT) as img:
-            draw_image(draw, image_desc)
             draw(img)
+            overlay_images(img, image_desc)
             img.save(filename=path)
 
 
@@ -290,30 +293,27 @@ def draw_rect(
     draw.pop()
 
 
-def draw_image(draw, image_description):
-    draw.push()
-    for o in COMPOSITE_OPERATORS:
-        for i in image_description:
-            image = Image(filename=i.get("image")).clone()
-            x = i.get("x")
-            y = i.get("y")
-            width = i.get("width")
-            height = i.get("height")
-            outline = i.get("outline")
-            radius = i.get("radius")
+def overlay_images(img, image_description):
+    for i in image_description:
+        image_parm = i.get("path")
+        if image_parm is not None:
+            image = Image(filename=image_parm).clone()
+        else:
+            try:
+                image = Image(blob=i.get("blob")).clone()
+            except BaseError as e:
+                print(f"Unable to load image {i}, error {e}")
+        x = i.get("x")
+        y = i.get("y")
+        outline = i.get("outline")
+        radius = i.get("radius")
 
-            rounded_image = mask_edges(image, radius)
-
-            draw.composite(
-                operator=o,
-                left=x,
-                top=y,
-                width=width,
-                height=height,
-                image=rounded_image,
-            )
-
-    draw.pop()
+        #rounded_image = mask_edges(image, radius)
+        img.composite_channel(channel=CHANNELS["default_channels"],
+            image=image,
+            left=x,
+            top=y,
+            operator="over")
 
 
 def mask_edges(img, radius):  # TODO: doesn't work
@@ -329,9 +329,6 @@ def mask_edges(img, radius):  # TODO: doesn't work
                 radius=radius,
             )
             ctx(mask)
-            # mask.save(filename='mask.png')
-        # res.composite_channel('all_channels', mask, 'copy_alpha', 0, 0)
-        # apply_mask(res, mask)
         return res
 
 
@@ -340,7 +337,6 @@ def apply_mask(image, mask):
         width=image.width, height=image.height, background=Color("transparent")
     ) as alpha_image:
         alpha_image.composite_channel("alpha", mask, "copy_alpha", 0, 0)
-        # alpha_image.save(filename='alpha.png')
         image.composite_channel("alpha", alpha_image, "multiply", 0, 0)
 
 
@@ -366,25 +362,51 @@ def clear_cache(*args):
                 return
 
 
+async def download(url):
+    """url to blob"""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                res = await resp.read()
+                return res
+
+
+def resize(width, height, filename=None, blob=None):
+    """Resize image and make blob, pass either filename or blob"""
+    with Image(filename=filename, blob=blob) as img:
+        img.resize(width, height)
+        return img.make_blob()
+
+
 async def cache_images(guild_id, member_id, pfp_url=None):
     """Downloads the ressources necessary for the render step"""
     res = {}
     if pfp_url is not None:
-        filename = f"{TEMP_DIR}{guild_id}_{member_id}_pfp.png"
+        filename = f"{TEMP_DIR}/{guild_id}_{member_id}_pfp.png"
         if isinstance(pfp_url, str):
-            with open(filename, "wb") as output:
-                pfp_png = urllib.request.urlopen(pfp_url)
-                output.write(pfp_png.read())
+            try:
+                last_modified = os.path.getmtime(filename)
+                cache_limit = datetime.now() - timedelta(hours=CACHE_DURATION)
+            except OSError:
+                last_modified = None
+            if last_modified is None or last_modified < cache_limit:
+                with open(filename, "wb") as output:
+                    pfp_png = await download(pfp_url)
+                    output.write(resize(ICON_SIZE, ICON_SIZE, blob = pfp_png))
         else:
-            await pfp_url.save(filename)
+            blob = await pfp_url.fetch()
+            blob = resize(ICON_SIZE, ICON_SIZE, blob=blob)
+            with open(filename, "wb") as output:
+                output.write(blob)
         res["pfp"] = filename
     return res
 
 
 # Test
 #profile_icon = "icon.png"
-#si = "s_icon.png"
-# render_guild_card(373877286459408384,161774022764396544, "Noiregya", "Coins", 55, 155, 3, [si, si, si, si, si, si, si, si, si, si, si, si, si, si, si, si, si], pfp=profile_icon, next_req_str="in 235 minutes").save_svg('render.svg')
+#base64_code = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAMAUExURQAAAAYAAQAEBgoBAQ8FBA8LBwkHCgwGCg4JCw4OCg4KDRMGBRYGBxIJBxEFCBEFDBEKChAKCxYKChENCxYNCxEKDBQLDRINDhYODhgLCxwNCxoLDhkNDRgPDhoODhwPDQ8RDRYSDxYQDxoSDh0SDxsUDh4VDh8VDw8HFRMLEhEOEBYNEBkPEhwPERgPFBcSEhUVEBcTFRoREhkTEBsSERkREh0RER0TERwTEhkUEhsUERsUEx0UEB8VER0VEh4VEh8WEhoSFh4TFRwTFRkVFR4VFR0VFB8WFB0XFx8YER8YFhcUHhsVGB0WGR8aGyITDiATESEVESEVEyAWEyIWEyEVFSEXFSIXFSIXFiIYEyIZFSEYFiIYFiIXGCIZGSUaGiAeGiceGiEbHiUbHSYdHSoeGyofHCMdISofIiofJCYhISkhIS4hIykgJS8jJyokJi4mJSkiKzAnJjEoJjklKDIqKDczMTsyMD0zMD04OEc6NkE7O0Y7OkA6PUM8PEQ+PUk/P0hCP0c+QUdBQ0tCRkpFRk9GR0pFTk5JTVFDRFRMSlJLTVFOTVtPTlVRT1xST09OUFdSUl5SUltWVlxWVl5XWF9aWmBVUmZdWmNaXGBcXGhdXWpgX3JmX2tkY21jZW5pZWxnaXBpZHVtbXpwbnlxcXx8eoN4dIN6eIV+fYqGho2EhI+OjpKLi5WNi5aTk5qTkJyYl5qZmZ2fmaedmaaenammoq2mo6mlpaqpprOspbCqqLGsqrSsq7Gurbasrbyzrry1rrSwsLiwsrq0tL69t8G9ucXBvcC+wsnFxszGxMrIxdDNy9PRztjSzc/c1NbW1dnV0tjX1dzX1d3Z09nZ2d7b2tvd2N7d2d/b3eHb2ODc2uLe3uTi3+Df4ebi4uLk4eXh5OHl5+jk4+rp5+vq6evu6u7s6+/t7fDs6/Lv7vLw7/Xz7ezx9PX18/P09fT19Pn18fv39fr68/r59v/79vr6+fv++P7++v/8+vv9/f3+/v///P/9/////wAAACPrPuEAAAEAdFJOU////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wBT9wclAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAEZElEQVRIS61VaXRTRRSuIqIgYgUaENtqS6kWSqGNtDYkKSn0YQSkJGnS10eRQw+gdUGOiIorLiCLC4v7jnVB3MVdATc29wWPIm6oB3EFFS0N3/PeO/Ne0sofz/E7Z+4y832ZeTN3Jhn2f8T/J1iqfUfsRzA+1Gs20DrbqK1q0F1pSAlGB73FA4wW3yNIoTlSaNsz62tPeUWTUgJvYDuKgUGamULhhCp0TrZNrtBELaikIc/dNzJDjEYmmxiWZpPzKqYS5PMATmPT7Fl13jZJgaNvEDfrl91TyNULVQQncvf4Z9milNpaib7aBJRLVEDTk6t1BD7u3BJhixJgR2ZSQsbiGnFl94kbrgWSGAG2RcU4Aa2HS08ebQLGSKg344POIugviZ+NBwUvlPywE59TvDLpge9cHMH94K8mVIlAwqbVZPrQksqDRj5GU7IdNcMmGM8Bx1CSfJVJqGFBoYQyzSW4lN0OYEiXfRjFcfa3p/NyLj+UE2z1kUA+GaXdxf0mtoXNdRKiTH4rV20J/CTY/JJeIKpxLW4mL7sMtFEbiTfQl3x+QrrQnwR31O5BU+Bvyg6hU12GtyxLDRrU4mQOI9+Yx5sS3RghwTR/g3GbxZ+5F6sTltkYjy+nBF5z4iTTrAN4sVcH7cI5CEcMEjAuzM9hDsIJ00okomM5ros3mGYi7scBlKwIE6s8aN+uBcOxB1hIM59kWuY10beVIG7VhaOGnMR0p/a0IMiMI4GjSHMXzuQM9TCsevwxS7Z3ipQFQwnGMaMTilqzyF+xHsgApgKLwEd4J/X1Ba+JoQR8HWjah/YBF3Ao+BgL535ftgU7Ke6jSpWgBHLafPrjQBo62u7git1N7Vi0kp3GZSRQgsuGqeHfuezx5S29r1rTm6NOyGMH7AoIj6AEdgV1/kVtqAzzGQtacKUKjErFcwV2kxrooZyDudiIz8ifr1kERyCfLZWUDj6CM6g5W0RwBJOE4K5F46AZANeAc2oER0BHIXfu36BXoVFzGK6gEn651R0RKFOX34ErsAcEEK1bpWkOHg0+8AzcLWWkBHbswbOASOBWzQW+Cw1te7pxa7sJ0gVevjF76ZrEE9FIJLrkE06Qm75FhDTBmG0zsubNeQ+5MSsem3oxfr7+7A1fA6MK9LhCmoBP+6fmUMmCe3k9T757/4EZ878oLYKhxxXSBI8xrxdwcNiXnTeSi6+tH704mKnHFVIC9dy8Rm1wNdc65G4y/JohSAl4Rai+iMyuyfjwHED9AuFFzRC4gidep6FB8svIguebP6lM6N0RuKVKcAW8p9nwnfw8He5A4H1Kf2Qy3XQ4f1cMVyDvALoet37gU8gJHU+/31V66IHmN9iFK9CFVJTE2FPfzFr30Tt8WQkPU/NpDqOjADf1RBDFPXVGaMpsd9auoOZXTQDmI7RShwrOA8BwBSuq1OA9j78MmqMdYprDcAW238yZ6On2KW8q+mmmxv7vg23qYbrIFSPUFzOS6RfOtv8BvUOe2yDo30UAAAAASUVORK5CYII="
+#si_data = base64_code.encode()
+#si = base64.b64decode(si_data)
 #generate_guild_card(
 #    "render/testrender.png",
 #    161774022764396544,
