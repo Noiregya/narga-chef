@@ -9,7 +9,8 @@ CONDITION = 4
 def insert(cursor, guild_id, a_name, icon, condition):
     """Insert an element in the database"""
     cursor.execute(f"INSERT INTO {TABLE_NAME} (guild, a_name, icon, condition)"
-        " values(%s, %s, %s, %s)",
+        " values(%s, %s, %s, %s) "
+        " ON CONFLICT (ident) DO NOTHING",
         [guild_id, a_name, icon, condition])
 
 def select(cursor, guild, ident = None, a_name = None, icon = None, condition = None):

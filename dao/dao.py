@@ -139,12 +139,12 @@ def request_register(guild_id, request_type, name, effect, value):
             return requests.insert(cursor, guild_id, request_type, name, effect, value)
 
 
-def request_delete(guild_id, request_type, name, effect):
+def request_delete(guild_id, ident = None, request_type = None, request_name = None, effect = None, list_ident = None):
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return requests.delete(cursor, guild_id, request_type, name, effect)
+            return requests.delete(cursor, guild_id, ident, request_type, request_name, effect, list_ident)
 
 
 def get_request(guild_id, request_type, name, effect):
@@ -221,13 +221,13 @@ def insert_reward(guild_id, condition, nature, reward_id, points_required):
             )
 
 
-def delete_reward(guild_id, condition, nature, reward_id):
+def delete_reward(guild_id, list_ident=None, condition=None, nature=None, reward_id=None):
     """Delete a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return rewards.delete(cursor, guild_id, condition, nature, reward_id)
+            return rewards.delete(cursor, guild_id, list_ident, condition, nature, reward_id)
 
 
 def get_rewards(guild_id, list_ident=None, condition=None, nature=None, reward_id=None):
@@ -257,7 +257,7 @@ def deny_reward(guild_id, user_id, reward):
             return reward_attr.delete(cursor, guild_id, user_id, reward)
 
 
-def select_award_attribution(guild_id, user_id, ident = None):
+def get_reward_attribution(guild_id, user_id, ident = None):
     """Selects award attributions"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
@@ -284,13 +284,13 @@ def deny_request(guild_id, user_id, request):
             return request_attr.delete(cursor, guild_id, user_id, request)
 
 
-def select_request_attribution(guild_id, user_id, ident = None):
-    """Selects request attributions"""
+def get_request_attribution(guild_id, member_id, ident = None):
+    """Gets request attributions"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return request_attr.select(cursor, guild_id, user_id, ident)
+            return request_attr.select(cursor, guild_id, member_id, ident)
 
 def insert_achievement(guild_id, a_name, icon, condition):
     """Insert a reward in the database"""
@@ -307,4 +307,22 @@ def select_achievements(guild, ident = None, name = None, icon = None, condition
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return achievements.select(cursor, guild, ident , name , icon, condition)
+            return achievements.select(cursor, guild, ident, name, icon, condition)
+
+
+def select_achievement_attr(guild, member = None, achievement = None):
+    """Selects achievement attributions"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return achievement_attr.select(cursor, guild, member, achievement)
+
+
+def award_achievement(guild, member, achievement):
+    """Award achievement to a member"""
+    with psycopg.connect(
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+    ) as connection:
+        with connection.cursor() as cursor:
+            return achievement_attr.insert(cursor, guild, member, achievement)

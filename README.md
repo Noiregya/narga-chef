@@ -12,6 +12,7 @@ The values you must provide are:
 * host
 * password
 * db_user
+* cache_duration (in hours)
 ## Install Image Magick 7
 Image Magick is used to render SVG into png for discord. I couldn't find a way around it.
 ### Linux: 

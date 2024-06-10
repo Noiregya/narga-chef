@@ -198,7 +198,8 @@ async def request_delete(
     if not is_setup:
         return await ctx.send(error)
     # Business
-    dao.dao.request_delete(ctx.guild.id, request_type, request_name, request_effect)
+    dao.dao.request_delete(ctx.guild.id, request_type = request_type, 
+        request_name = request_name, effect = request_effect)
     # Respond
     return await ctx.send(
         f"{request_type} {request_name} with effect {request_effect} removed"
@@ -643,6 +644,67 @@ async def reward_list(ctx: SlashContext):
     paginator = Paginator.create_from_string(bot, rewards_str, page_size=1000)
     return await paginator.send(ctx)
 
+
+@slash_command(
+    name="reward_completed",
+    description="See what rewards a user have completed",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to look at",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+async def reward_completed(
+    ctx: SlashContext,
+    member: Member,
+):
+    """Reward completed command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    reward_attr_str = business.list_reward_completed(ctx.guild.id, member.id)
+    paginator = Paginator.create_from_string(bot, reward_attr_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
+@slash_command(
+    name="request_completed",
+    description="See what requests a user have completed",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to look at",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+async def request_completed(
+    ctx: SlashContext,
+    member: Member,
+):
+    """Request completed command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    request_attr_str = business.list_request_completed(ctx.guild.id, member.id)
+    paginator = Paginator.create_from_string(bot, request_attr_str, page_size=1000)
+    return await paginator.send(ctx)
+
+
 @slash_command(
     name="achievement_add",
     description="Add an achievement",
@@ -676,8 +738,8 @@ async def achievement_add(
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    return await ctx.send(business.add_achievement(ctx.guild.id, name, image, condition),
-        ephemeral=True)
+    res = await business.add_achievement(ctx.guild.id, name, image, condition)
+    return await ctx.send(res, ephemeral=True)
 
 
 @slash_command(

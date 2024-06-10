@@ -12,6 +12,7 @@ import dao.guilds as guilds
 import dao.requests as requests
 import dao.rewards as rewards
 import dao.request_attr as request_attr
+import dao.reward_attr as reward_attr
 import dao.achievements as achievements
 import dao.achievement_attr as achievement_attr
 import tools
@@ -363,7 +364,7 @@ async def remove_reward(guild_id, reward, condition="milestone", nature="role"):
     """Removes a reward"""
     reward_string = f"<@&{reward.id}>"
     try:
-        dao.delete_reward(guild_id, condition, nature, reward.id)
+        dao.delete_reward(guild_id, condition=condition, nature=nature, reward_id=reward.id)
     except psycopg.Error as e:
         logging.error(e)
         return f"Could not delete this reward. {e}"
@@ -373,6 +374,22 @@ async def remove_reward(guild_id, reward, condition="milestone", nature="role"):
 def list_rewards(guild_id):
     """Make a string of all the rewards"""
     db_rewards = dao.get_rewards(guild_id)
+    rewards_str = "\n".join(
+        f"{rew[rewards.IDENT]};"
+        f"{rew[rewards.NATURE]};"
+        f"{rew[rewards.CONDITION]};"
+        f"{rew[rewards.REWARD]};"
+        f"{rew[rewards.POINTS_REQUIRED]}"
+        for rew in db_rewards
+    )
+    return "Id ;Nature ;Condition ;Reward ;Points\n" f"{rewards_str}"
+
+
+def list_reward_completed(guild_id, member_id):
+    """Lists all the rewards a user have completed"""
+    db_reward_attr = dao.get_reward_attribution(guild_id, member_id)
+    list_ident = [int(row[reward_attr.REWARD]) for row in db_reward_attr]
+    db_rewards = dao.get_rewards(guild_id, list_ident=list_ident)
     rewards_str = "\n".join(
         f"{rew[rewards.IDENT]};"
         f"{rew[rewards.NATURE]};"
@@ -399,7 +416,7 @@ def list_requests(guild_id, request_type):
 
 def list_request_completed(guild_id, member_id):
     """Make a string of all the requests that a member completed"""
-    db_request_attr = dao.select_request_attribution(guild_id, member_id)
+    db_request_attr = dao.get_request_attribution(guild_id, member_id)
     list_ident = [int(row[request_attr.REQUEST]) for row in db_request_attr]
     db_requests = dao.get_requests(guild_id, list_ident=list_ident)
     requests_str = "\n".join(
@@ -417,7 +434,7 @@ def list_request_completed(guild_id, member_id):
 
 
 def award_request(
-    guild_id, user_id, request_type=None, request_name=None, request_effect=None
+    guild_id, member_id, request_type=None, request_name=None, request_effect=None
 ):
     """award a request to a user"""
     db_requests = dao.get_requests(
@@ -428,10 +445,10 @@ def award_request(
     db_request = db_requests[0]
     ident = db_request[requests.IDENT]
     try:
-        dao.award_request(guild_id, user_id, ident)
+        dao.award_request(guild_id, member_id, ident)
     except psycopg.Error:
         pass
-    return f"<@{user_id}> is considered as having completed request {ident}"
+    return (f"<@{member_id}> is considered as having completed request {ident}")
 
 
 async def update_rewards(guild_id, member, current_points):
@@ -470,13 +487,13 @@ async def award_reward(ctx, ident):
     content = None
     error = False
     guild_id = ctx.guild.id
-    user_id = ctx.author.id
-    db_award_attr = dao.select_award_attribution(guild_id, user_id, ident)
+    member_id = ctx.author.id
+    db_award_attr = dao.get_reward_attribution(guild_id, member_id, ident)
     if len(db_award_attr) > 0:
         error = True
         content = "Couldn't give this award, you already have it"
         return [content, error]
-    dao.award_reward(guild_id, user_id, ident)
+    dao.award_reward(guild_id, member_id, ident)
     db_rewards = dao.get_rewards(guild_id, list_ident=ident)
     if len(db_rewards) < 1:
         error = True
@@ -502,7 +519,7 @@ async def toggle_role_reward(ctx, ident):
         return "This role can't be obtained anymore"
     db_reward = db_rewards[0]
     role_id = db_reward[dao.rewards.REWARD]
-    db_award_attr = dao.select_award_attribution(
+    db_award_attr = dao.get_reward_attribution(
         guild_id, user.id, ident
     )
     if len(db_award_attr) == 0:
@@ -517,9 +534,86 @@ async def toggle_role_reward(ctx, ident):
     return content
 
 
-def add_achievement(guild_id, name, image, condition):
+def update_achievements(guild_id, member_id):
+    """Adds all the missing achievements to the user if obtained"""
+    res = ""
+    db_achievements = dao.select_achievements(guild_id)
+    db_member = dao.get_member(guild_id, member_id)
+    db_req_attr = dao.get_request_attribution(guild_id, member_id)
+    db_rew_attr = dao.get_reward_attribution(guild_id, member_id)
+    db_requests = dao.get_requests(guild_id)
+    db_rewards = dao.get_rewards(guild_id)
+    for achievement in db_achievements:
+        is_parsed, conditions = tools.parse_condition(achievement[achievements.CONDITION])
+        if not is_parsed:
+            res = f"{res}Can't parse condition for achievement {achievement[achievements.NAME]}\n"
+            continue
+        requests_lst, rewards_lst, points = conditions
+        missing_req, missing_rew = missing_condition(requests_lst, rewards_lst, db_requests, db_rewards)
+        if len(missing_req) > 0 or len(missing_rew) > 0:
+            dao.request_delete(guild_id, ident=missing_req)
+            dao.reward_delete(guild_id, ident=missing_rew)
+            res = (f"{res}Missing requests {missing_req} and rewards {missing_rew} from database\n"
+                f"Achievement {achievement[achievements.NAME]} ignored, please delete it\n")
+            continue
+        obtained = False
+        if db_member[members.POINTS] >= points:
+            obtained = True
+        if not obtained:
+            break
+        for cond_req in requests_lst:
+            obtained = False
+            for attr in db_req_attr:
+                if attr[request_attr.REQUEST] == cond_req:
+                    obtained = True
+                    break
+        if not obtained:
+            break
+        for cond_rew in rewards_lst:
+            obtained = False
+            for attr in db_rew_attr:
+                if attr[reward_attr.REWARD] == cond_rew:
+                    obtained = True
+                    break
+        if not obtained:
+            break
+        # Achievement has been obtained
+        try:
+            dao.award_achievement(guild_id, member_id, achievement[achievements.IDENT])
+            res = f"{res}Added achievement {achievement[achievements.NAME]}\n"
+        except psycopg.Error:
+            continue
+    return res
+
+
+def missing_condition(requests_lst, rewards_lst, db_requests, db_rewards):
+    """Checks the conditions against the database objects to make sure it exists"""
+    missing_req = []
+    for request in requests_lst:
+        present = False
+        for db_req in db_requests:
+            if db_req[requests.IDENT] == request:
+                present = True
+                break
+        if not present:
+            missing_req.append(request)
+    missing_rew = []
+    for reward in rewards_lst:
+        present = False
+        for db_rew in db_rewards:
+            if db_rew[rewards.IDENT] == reward:
+                present = True
+                break
+        if not present:
+            missing_rew.append(reward)
+    return (missing_req, missing_rew)
+
+
+async def add_achievement(guild_id, name, image, condition):
     """Add the following achievement"""
     is_parsed, conditions = tools.parse_condition(condition)
+    blob = await render.download(image.url)
+    icon = render.resize(render.SMALL_ICON, render.SMALL_ICON, blob = blob)
     if is_parsed:
         requests_lst, rewards_lst, points = conditions
         no_condition = len(requests_lst) == 0 and len(rewards_lst) == 0 and points == 0
@@ -542,7 +636,7 @@ def add_achievement(guild_id, name, image, condition):
             f"Requests {missing_req}, Rewards {missing_rew}")
     json_condition = json.dumps({"requests":requests_lst, "rewards":rewards_lst, "points":points})
     try:
-        dao.insert_achievement(guild_id, name, image.url, json_condition)
+        dao.insert_achievement(guild_id, name, icon, json_condition)
     except psycopg.Error as e:
         logging.error(e)
         return (
@@ -556,15 +650,16 @@ def list_achievements(guild_id):
     achievements_str = "\n".join(
         f"{req[achievements.IDENT]};"
         f"{req[achievements.NAME]};"
-        f"{req[achievements.ICON]};"
+        #f"{req[achievements.ICON]};"
         f"{req[achievements.CONDITION]}"
         for req in db_achievements
-    ) 
-    return "Id ;Name; Image ;Condition; Points\n" f"{achievements_str}"
+    )
+    return "Id ;Name; Condition; Points\n" f"{achievements_str}"
 
 
 async def get_card_image(db_member, db_guild, rank, pfp=None):
     """Get the rendered image of a user's guild card"""
+    res = ""
     currency = db_guild[guilds.CURRENCY]
     guild_id = db_member[members.GUILD]
     member_id = db_member[members.ID]
@@ -572,10 +667,20 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
     nick = db_member[members.NICKNAME]
     balance = points - db_member[members.SPENT]
     next_sub_t = db_member[members.NEXT_SUBMISSION_TIME]
+    # Update the user's achievements
+    res = f"{res}\n{update_achievements(guild_id, member_id)}"
+    db_achievements = dao.select_achievements(guild_id)
+    db_achievement_attr = dao.select_achievement_attr(guild_id, member_id)
+    icon_achievements = []
+    for ach in db_achievements:
+        for attr in db_achievement_attr:
+            if ach[achievements.IDENT] == attr[achievement_attr.ACHIEVEMENT]:
+                icon_achievements.append(ach[achievements.ICON])
+                break
     # last_sub = db_member[dao.members.LAST_SUBMISSION]
     png = os.path.abspath(f"render/{guild_id}_{member_id}_card.png")
     # Replaces image if exists
-    render.clear_cache(png)
+    # render.clear_cache(png)
     images = await render.cache_images(guild_id, member_id, pfp_url=pfp)
 
     if next_sub_t.year is datetime.min.year:
@@ -596,6 +701,7 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
         points,
         rank,
         pfp=images.get("pfp"),
+        achievements=icon_achievements,
         next_req_str=next_req_str,
     )
     return png

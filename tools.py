@@ -341,7 +341,8 @@ def parse_condition(condition):
     try:
         json_contents = json.loads(condition)
     except json.JSONDecodeError:
-        return(False, "Invalid JSON Syntax, make sure that the parameter names are in \"double quotes\",")
+        return(False,
+        "Invalid JSON Syntax, make sure that the parameter names are in \"double quotes\",")
     # We assume there's only one object
     requests_str = json_contents.get("requests") or []
     rewards_str = json_contents.get("rewards") or []
@@ -355,5 +356,4 @@ def parse_condition(condition):
     if points is None or not isinstance(points, int):
         return (False, "Points is missing or not a number")
     return (True, [requests_lst, rewards_lst, points])
-
 
