@@ -210,33 +210,32 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
     return db_member
 
 
-def insert_reward(guild_id, condition, nature, reward_id, points_required):
+def insert_reward(guild_id, name, condition, nature, reward_id, points_required):
     """Insert a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
             return rewards.insert(
-                cursor, guild_id, condition, nature, reward_id, points_required
+                cursor, guild_id, name, condition, nature, reward_id, points_required
             )
 
-
-def delete_reward(guild_id, list_ident=None, condition=None, nature=None, reward_id=None):
+def delete_reward(guild_id, list_ident=None, name=None, condition=None, nature=None, reward_id=None):
     """Delete a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return rewards.delete(cursor, guild_id, list_ident, condition, nature, reward_id)
+            return rewards.delete(cursor, guild_id, list_ident, name, condition, nature, reward_id)
 
 
-def get_rewards(guild_id, list_ident=None, condition=None, nature=None, reward_id=None):
+def get_rewards(guild_id, list_ident=None, name=None, condition=None, nature=None, reward_id=None):
     """Selects a reward in the database"""
     with psycopg.connect(
         f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
     ) as connection:
         with connection.cursor() as cursor:
-            return rewards.select(cursor, guild_id, list_ident, condition, nature, reward_id)
+            return rewards.select(cursor, guild_id, list_ident, name, condition, nature, reward_id)
 
 
 def award_reward(guild_id, user_id, reward):

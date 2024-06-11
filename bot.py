@@ -130,35 +130,6 @@ async def complete_request(
     )
 
 
-@slash_command(
-    name="request_completed",
-    description="See what requests a user have completed",
-    default_member_permissions=Permissions.MANAGE_GUILD,
-)
-@slash_option(
-    name="member",
-    description="Member you want to look at",
-    opt_type=OptionType.USER,
-    autocomplete=True,
-    required=True,
-)
-async def request_completed(
-    ctx: SlashContext,
-    member: Member,
-):
-    """Request completed command have been received"""
-    # Check input and fetch from database
-    guild_error = tools.check_in_guild(ctx)
-    if guild_error is not None:
-        return await ctx.send(guild_error)
-    is_setup, error = tools.check_guild_setup(ctx.guild.id)
-    if not is_setup:
-        return await ctx.send(error)
-    # Business
-    request_attr_str = business.list_request_completed(ctx.guild.id, member.id)
-    paginator = Paginator.create_from_string(bot, request_attr_str, page_size=1000)
-    return await paginator.send(ctx)
-
 
 @slash_command(
     name="request_delete",
@@ -551,6 +522,12 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
 #    required=True,
 # )
 @slash_option(
+    name="name",
+    description="Name of the reward",
+    opt_type=OptionType.STRING,
+    required=True,
+)
+@slash_option(
     name="condition",
     description="Condition for awarding reward",
     required=True,
@@ -558,22 +535,23 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     choices=[
         SlashCommandChoice(name="Bought", value="bought"),
         SlashCommandChoice(name="Milestone", value="milestone"),
+        SlashCommandChoice(name="Given Manually", value="given"),
     ],
 )
 @slash_option(
-    name="reward",
+    name="role",
     description="A role to award",
-    required=True,
+    required=False,
     opt_type=OptionType.ROLE,
 )
 @slash_option(
     name="points_required",
     description="Amount of points required",
-    required=True,
+    required=False,
     opt_type=OptionType.INTEGER,
 )
 async def reward_add(
-    ctx: SlashContext, condition: str, reward: Role, points_required: int
+    ctx: SlashContext, name: str, condition: str, role: Role = None, points_required: int = 0
 ):
     """Add a reward that users can get when gaining points"""
     # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
@@ -583,12 +561,19 @@ async def reward_add(
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
+    if (role is None or points_required == 0) and condition != "given":
+        return await ctx.send("Error adding the reward, please specify a role and a point amount "
+            "if the type is not given", ephemeral = True)
+    role_id = 0
+    if role is not None:
+        role_id = role.id
     return await business.add_reward(
         ctx,
-        reward,
+        name,
         points_required,
-        condition=condition,
-        currency=db_guild[dao.guilds.CURRENCY],
+        role_id = role_id,
+        condition = condition,
+        currency = db_guild[dao.guilds.CURRENCY],
     )
 
 
@@ -598,22 +583,12 @@ async def reward_add(
     default_member_permissions=Permissions.MANAGE_GUILD,
 )
 @slash_option(
-    name="condition",
-    description="Condition for awarding reward",
+    name="ident",
+    description="Id of a reward",
     required=True,
-    opt_type=OptionType.STRING,
-    choices=[
-        SlashCommandChoice(name="Bought", value="bought"),
-        SlashCommandChoice(name="Milestone", value="milestone"),
-    ],
+    opt_type=OptionType.INTEGER,
 )
-@slash_option(
-    name="reward",
-    description="A role to award",
-    required=True,
-    opt_type=OptionType.ROLE,
-)
-async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
+async def reward_delete(ctx: SlashContext, ident: int):
     """Add a reward that users can get when gaining points"""
     # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
     guild_error = tools.check_in_guild(ctx)
@@ -622,9 +597,9 @@ async def reward_delete(ctx: SlashContext, condition: str, reward: Role):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    return await ctx.send(await business.remove_reward(
-        ctx.guild.id, reward, condition=condition
-        ), ephemeral=True)
+    # guild_id, ident, name, nature, role_id = None
+    return await ctx.send(await business.delete_reward(
+        ctx.guild.id, ident), ephemeral=True)
 
 
 @slash_command(
