@@ -534,6 +534,37 @@ async def toggle_role_reward(ctx, ident):
     return content
 
 
+def conditions_fulfilled(db_member, db_req_attr, db_rew_attr, conditions):
+    """Check if all the achievement conditions are fulfilled"""
+    requests_lst, rewards_lst, points = conditions
+    obtained = False
+    if db_member[members.POINTS] >= points:
+        obtained = True
+    if not obtained:
+        return obtained
+    obtained = True
+    for cond_req in requests_lst:
+        obtained = False
+        for attr in db_req_attr:
+            if attr[request_attr.REQUEST] == cond_req:
+                obtained = True
+                break
+        if not obtained:
+            break
+    if not obtained:
+        return obtained
+    obtained = True
+    for cond_rew in rewards_lst:
+        obtained = False
+        for attr in db_rew_attr:
+            if attr[reward_attr.REWARD] == cond_rew:
+                obtained = True
+                break
+        if not obtained:
+            break
+    return obtained
+
+
 def update_achievements(guild_id, member_id):
     """Adds all the missing achievements to the user if obtained"""
     res = ""
@@ -556,33 +587,13 @@ def update_achievements(guild_id, member_id):
             res = (f"{res}Missing requests {missing_req} and rewards {missing_rew} from database\n"
                 f"Achievement {achievement[achievements.NAME]} ignored, please delete it\n")
             continue
-        obtained = False
-        if db_member[members.POINTS] >= points:
-            obtained = True
-        if not obtained:
-            break
-        for cond_req in requests_lst:
-            obtained = False
-            for attr in db_req_attr:
-                if attr[request_attr.REQUEST] == cond_req:
-                    obtained = True
-                    break
-        if not obtained:
-            break
-        for cond_rew in rewards_lst:
-            obtained = False
-            for attr in db_rew_attr:
-                if attr[reward_attr.REWARD] == cond_rew:
-                    obtained = True
-                    break
-        if not obtained:
-            break
-        # Achievement has been obtained
-        try:
-            dao.award_achievement(guild_id, member_id, achievement[achievements.IDENT])
-            res = f"{res}Added achievement {achievement[achievements.NAME]}\n"
-        except psycopg.Error:
-            continue
+        if conditions_fulfilled(db_member, db_req_attr, db_rew_attr, conditions):
+            # Achievement has been obtained
+            try:
+                dao.award_achievement(guild_id, member_id, achievement[achievements.IDENT])
+                res = f"{res}Added achievement {achievement[achievements.NAME]}\n"
+            except psycopg.Error:
+                continue
     return res
 
 
