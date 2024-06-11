@@ -336,20 +336,24 @@ def add_request(ctx, req_type, name, effect, value):
 
 async def add_reward(
     ctx,
-    reward,
+    name,
     points_required,
-    currency="points",
-    condition="milestone",
-    nature="role",
+    role_id = 0,
+    currency = "points",
+    condition = "milestone",
+    nature = "role",
 ):
     """Adds a new reward"""
-    reward_string = f"<@&{reward.id}>"
+    if condition == "given":
+        reward_string = name
+    else:
+        reward_string = f"{name} <@&{role_id}>"
     try:
-        dao.insert_reward(ctx.guild.id, condition, nature, reward.id, points_required)
+        dao.insert_reward(ctx.guild.id, name, condition, nature, role_id, points_required)
     except psycopg.Error as e:
         logging.error(e)
         return await ctx.send(
-            f"Could not add {nature} {reward.name} obtained through {condition}"
+            f"Could not add {nature} {name} obtained through {condition}"
             " please check that it doesn't already exists"
         )
     return await ctx.send(
@@ -360,15 +364,14 @@ async def add_reward(
     #  ctx.user.add_role(reward, "Milestone reward")
 
 
-async def remove_reward(guild_id, reward, condition="milestone", nature="role"):
+async def delete_reward(guild_id, ident):
     """Removes a reward"""
-    reward_string = f"<@&{reward.id}>"
     try:
-        dao.delete_reward(guild_id, condition=condition, nature=nature, reward_id=reward.id)
+        dao.delete_reward(guild_id, list_ident = [ident])
     except psycopg.Error as e:
         logging.error(e)
         return f"Could not delete this reward. {e}"
-    return f"{nature} {reward_string} obtained through {condition} removed"
+    return f"{ident} removed"
 
 
 def list_rewards(guild_id):
@@ -376,13 +379,14 @@ def list_rewards(guild_id):
     db_rewards = dao.get_rewards(guild_id)
     rewards_str = "\n".join(
         f"{rew[rewards.IDENT]};"
+        f"{rew[rewards.NAME]};"
         f"{rew[rewards.NATURE]};"
         f"{rew[rewards.CONDITION]};"
-        f"{rew[rewards.REWARD]};"
+        f"{rew[rewards.ROLE]};"
         f"{rew[rewards.POINTS_REQUIRED]}"
         for rew in db_rewards
     )
-    return "Id ;Nature ;Condition ;Reward ;Points\n" f"{rewards_str}"
+    return "Id ;Name; Nature ;Condition ;Role ;Points\n" f"{rewards_str}"
 
 
 def list_reward_completed(guild_id, member_id):
@@ -392,13 +396,14 @@ def list_reward_completed(guild_id, member_id):
     db_rewards = dao.get_rewards(guild_id, list_ident=list_ident)
     rewards_str = "\n".join(
         f"{rew[rewards.IDENT]};"
+        f"{rew[rewards.NAME]};"
         f"{rew[rewards.NATURE]};"
         f"{rew[rewards.CONDITION]};"
-        f"{rew[rewards.REWARD]};"
+        f"{rew[rewards.ROLE]};"
         f"{rew[rewards.POINTS_REQUIRED]}"
         for rew in db_rewards
     )
-    return "Id ;Nature ;Condition ;Reward ;Points\n" f"{rewards_str}"
+    return "Id; Name; Nature ;Condition ;Role ;Points\n" f"{rewards_str}"
 
 
 def list_requests(guild_id, request_type):
@@ -461,7 +466,7 @@ async def update_rewards(guild_id, member, current_points):
             and reward[rewards.POINTS_REQUIRED] <= current_points
         ):
             try:
-                await member.add_role(reward[rewards.REWARD], "Milestone reward")
+                await member.add_role(reward[rewards.ROLE], "Milestone reward")
             except BotException:
                 return
 
@@ -501,8 +506,8 @@ async def award_reward(ctx, ident):
         return [content, error]
     db_reward = db_rewards[0]
     if db_reward[dao.rewards.NATURE] == "role":
-        await ctx.author.add_role(db_reward[dao.rewards.REWARD])
-        content = f"Role <@&{db_reward[dao.rewards.REWARD]}> awarded"
+        await ctx.author.add_role(db_reward[dao.rewards.ROLE])
+        content = f"Role <@&{db_reward[dao.rewards.ROLE]}> awarded"
     if content is None:
         error = True
         content = f"Could not award reward {ident}"
@@ -518,7 +523,7 @@ async def toggle_role_reward(ctx, ident):
     if len(db_rewards) == 0:
         return "This role can't be obtained anymore"
     db_reward = db_rewards[0]
-    role_id = db_reward[dao.rewards.REWARD]
+    role_id = db_reward[dao.rewards.ROLE]
     db_award_attr = dao.get_reward_attribution(
         guild_id, user.id, ident
     )
@@ -583,7 +588,7 @@ def update_achievements(guild_id, member_id):
         missing_req, missing_rew = missing_condition(requests_lst, rewards_lst, db_requests, db_rewards)
         if len(missing_req) > 0 or len(missing_rew) > 0:
             dao.request_delete(guild_id, ident=missing_req)
-            dao.reward_delete(guild_id, ident=missing_rew)
+            dao.delete_reward(guild_id, list_ident=missing_rew)
             res = (f"{res}Missing requests {missing_req} and rewards {missing_rew} from database\n"
                 f"Achievement {achievement[achievements.NAME]} ignored, please delete it\n")
             continue

@@ -271,14 +271,14 @@ def generate_shop_items(db_guild, db_rewards, roles):
         try:
             reward = next(reward for reward in db_rewards
                 if reward[rewards.NATURE] == 'role'
-                and reward[rewards.REWARD] == role.id)
+                and reward[rewards.ROLE] == role.id)
             roles_rewards.append(reward)
         except StopIteration:
             continue
     
     for reward in roles_rewards:
         nature = reward[rewards.NATURE]
-        reward_content = reward[rewards.REWARD]
+        reward_content = reward[rewards.ROLE]
         ident = reward[rewards.IDENT]
         points = reward[rewards.POINTS_REQUIRED]
         reward_nature_list = rewards_per_nature.get(nature)
