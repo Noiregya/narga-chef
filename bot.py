@@ -130,6 +130,40 @@ async def complete_request(
     )
 
 
+@slash_command(
+    name="complete_reward",
+    description="Complete a reward for a user",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="member",
+    description="Member you want to complete the request for",
+    opt_type=OptionType.USER,
+    autocomplete=True,
+    required=True,
+)
+@slash_option(
+    name="ident",
+    description="Id of the reward",
+    opt_type=OptionType.INTEGER,
+    required=True,
+)
+async def complete_reward(
+    ctx: SlashContext,
+    member: Member,
+    ident: int,
+):
+    """Complete request command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    res = business.give_reward(ctx.guild.id, member.id, ident)
+    return await ctx.send(res)
+
 
 @slash_command(
     name="request_delete",

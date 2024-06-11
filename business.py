@@ -439,11 +439,13 @@ def list_request_completed(guild_id, member_id):
 
 
 def award_request(
-    guild_id, member_id, request_type=None, request_name=None, request_effect=None
+    guild_id, member_id, ident = None, request_type=None, request_name=None, request_effect=None
 ):
     """award a request to a user"""
+    if ident is not None:
+        list_ident = [ident]
     db_requests = dao.get_requests(
-        guild_id, request_type=request_type, name=request_name, effect=request_effect
+        guild_id, list_ident = list_ident, request_type=request_type, name=request_name, effect=request_effect
     )
     if len(db_requests) == 0:
         return "It seems that the request no longer exists in the database"
@@ -485,6 +487,16 @@ def generate_shop(db_guild, roles):
     # Makes new shop
     guild_rewards = dao.get_rewards(db_guild[guilds.ID], condition="bought")
     return tools.generate_shop_items(db_guild, guild_rewards, roles)
+
+
+def give_reward(guild_id, member_id, ident):
+    """give a reward to a member"""
+    try:
+        dao.award_reward(guild_id, member_id, ident)
+    except psycopg.Error as e:
+        print(e)
+        return f"Error adding reward"
+    return "Reward added"
 
 
 async def award_reward(ctx, ident):
