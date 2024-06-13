@@ -442,6 +442,7 @@ def award_request(
     guild_id, member_id, ident = None, request_type=None, request_name=None, request_effect=None
 ):
     """award a request to a user"""
+    list_ident = None
     if ident is not None:
         list_ident = [ident]
     db_requests = dao.get_requests(
