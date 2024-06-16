@@ -471,7 +471,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     required=True,
 )
 async def request_add(
-    ctx: SlashContext, request_type: str, name: str, effect: str, value: str
+    ctx: SlashContext, request_type: str, request_name: str, request_effect: str, value: str
 ):
     """Request register command have been received"""
     # Check input and fetch from database
@@ -482,7 +482,7 @@ async def request_add(
     if not is_setup:
         return await ctx.send(error)
     # Update DB
-    res = business.add_request(ctx, request_type, name, effect, value)
+    res = business.add_request(ctx, request_type, request_name, request_effect, value)
     # Respond
     return await ctx.send(res)
 

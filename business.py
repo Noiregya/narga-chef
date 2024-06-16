@@ -512,7 +512,7 @@ async def award_reward(ctx, ident):
         content = "Couldn't give this award, you already have it"
         return [content, error]
     dao.award_reward(guild_id, member_id, ident)
-    db_rewards = dao.get_rewards(guild_id, list_ident=ident)
+    db_rewards = dao.get_rewards(guild_id, list_ident=[ident])
     if len(db_rewards) < 1:
         error = True
         content = f"Reward number {ident} doesn't exist anymore, ask an admin for help"
@@ -532,7 +532,7 @@ async def toggle_role_reward(ctx, ident):
     content = None
     guild_id = ctx.guild.id
     user = ctx.author
-    db_rewards = dao.get_rewards(guild_id, nature="role", list_ident=ident)
+    db_rewards = dao.get_rewards(guild_id, nature="role", list_ident=[ident])
     if len(db_rewards) == 0:
         return "This role can't be obtained anymore"
     db_reward = db_rewards[0]
