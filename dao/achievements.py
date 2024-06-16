@@ -31,6 +31,7 @@ def select(cursor, guild, ident = None, a_name = None, icon = None, condition = 
     if condition is not None:
         req = f"{req}AND condition=%s "
         parm.insert(len(parm),condition)
+    req = f"{req}ORDER BY ident"
     cursor.execute(req,parm)
     return cursor.fetchall()
 

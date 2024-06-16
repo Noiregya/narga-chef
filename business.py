@@ -492,11 +492,14 @@ def generate_shop(db_guild, roles):
 
 def give_reward(guild_id, member_id, ident):
     """give a reward to a member"""
+    db_reward = dao.get_rewards(guild_id, list_ident=[ident])
+    if len(db_reward) == 0:
+        return f"No reward with ident {ident}"
     try:
         dao.award_reward(guild_id, member_id, ident)
     except psycopg.Error as e:
         print(e)
-        return f"Error adding reward"
+        return "Error adding reward"
     return "Reward added"
 
 
