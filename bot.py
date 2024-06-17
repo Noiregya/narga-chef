@@ -737,8 +737,14 @@ async def request_completed(
     required=True,
     opt_type=OptionType.STRING,
 )
+@slash_option(
+    name="description",
+    description="Description for the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
 async def achievement_add(
-    ctx: SlashContext, name: str, image: Attachment, condition: str
+    ctx: SlashContext, name: str, image: Attachment, condition: str, description: str
 ):
     """Add an achievement"""
     guild_error = tools.check_in_guild(ctx)
@@ -747,7 +753,7 @@ async def achievement_add(
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    res = await business.add_achievement(ctx.guild.id, name, image, condition)
+    res = await business.add_achievement(ctx.guild.id, name, image, condition, description)
     return await ctx.send(res, ephemeral=True)
 
 
@@ -764,9 +770,19 @@ async def achievement_list(ctx: SlashContext):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    achievements_str = business.list_achievements(ctx.guild.id)
-    paginator = Paginator.create_from_string(bot, achievements_str, page_size=1000)
-    return await paginator.send(ctx)
+    achievement_embeds = business.list_achievements(ctx.guild.id)
+    #paginator = Paginator.create_from_embeds(bot, *achievements_embeds)#Paginator.create_from_string(bot, achievements_str, page_size=1000)
+    if len(achievement_embeds) < 1:
+        return await ctx.send("No achievements yet!")
+    channel = ctx.channel
+    file, embed = achievement_embeds[0]
+    res = await ctx.send(file=file, embed=embed)
+    if len(achievement_embeds) > 1:
+        for embed_pair in achievement_embeds[1:]:
+            file, embed = embed_pair
+            await channel.send(file=file, embed=embed)
+    return res
+    #return await paginator.send(ctx)
 
 
 @slash_command(

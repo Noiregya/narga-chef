@@ -641,7 +641,7 @@ def missing_condition(requests_lst, rewards_lst, db_requests, db_rewards):
     return (missing_req, missing_rew)
 
 
-async def add_achievement(guild_id, name, image, condition):
+async def add_achievement(guild_id, name, image, condition, description):
     """Add the following achievement"""
     is_parsed, conditions = tools.parse_condition(condition)
     blob = await render.download(image.url)
@@ -668,7 +668,7 @@ async def add_achievement(guild_id, name, image, condition):
             f"Requests {missing_req}, Rewards {missing_rew}")
     json_condition = json.dumps({"requests":requests_lst, "rewards":rewards_lst, "points":points})
     try:
-        dao.insert_achievement(guild_id, name, icon, json_condition)
+        dao.insert_achievement(guild_id, name, icon, json_condition, description)
     except psycopg.Error as e:
         logging.error(e)
         return (
@@ -679,14 +679,7 @@ async def add_achievement(guild_id, name, image, condition):
 def list_achievements(guild_id):
     """Make a string of all the achievements"""
     db_achievements = dao.select_achievements(guild_id)
-    achievements_str = "\n".join(
-        f"{req[achievements.IDENT]};"
-        f"{req[achievements.NAME]};"
-        #f"{req[achievements.ICON]};"
-        f"{req[achievements.CONDITION]}"
-        for req in db_achievements
-    )
-    return "Id ;Name; Condition; Points\n" f"{achievements_str}"
+    return tools.generate_achievements(db_achievements)
 
 
 async def get_card_image(db_member, db_guild, rank, pfp=None):

@@ -5,17 +5,18 @@ IDENT = 1
 NAME = 2
 ICON = 3
 CONDITION = 4
+DESCRIPTION = 5
 
-def insert(cursor, guild_id, a_name, icon, condition):
+def insert(cursor, guild_id, a_name, icon, condition, description):
     """Insert an element in the database"""
-    cursor.execute(f"INSERT INTO {TABLE_NAME} (guild, a_name, icon, condition)"
-        " values(%s, %s, %s, %s) "
+    cursor.execute(f"INSERT INTO {TABLE_NAME} (guild, a_name, icon, condition, description)"
+        " values(%s, %s, %s, %s, %s) "
         " ON CONFLICT (ident) DO NOTHING",
-        [guild_id, a_name, icon, condition])
+        [guild_id, a_name, icon, condition, description])
 
-def select(cursor, guild, ident = None, a_name = None, icon = None, condition = None):
+def select(cursor, guild, ident = None, a_name = None, icon = None, condition = None, description = None):
     """Select constructed depending on the parameters that's given to it"""
-    req = (f"SELECT guild, ident, a_name, icon, condition FROM {TABLE_NAME}"
+    req = (f"SELECT guild, ident, a_name, icon, condition, description FROM {TABLE_NAME}"
         " where guild=%s")
     parm = []
     parm.insert(0, guild)
@@ -31,6 +32,9 @@ def select(cursor, guild, ident = None, a_name = None, icon = None, condition = 
     if condition is not None:
         req = f"{req}AND condition=%s "
         parm.insert(len(parm),condition)
+    if description is not None:
+        req = f"{req}AND description=%s "
+        parm.insert(len(parm),description)
     req = f"{req}ORDER BY ident"
     cursor.execute(req,parm)
     return cursor.fetchall()

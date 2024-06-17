@@ -371,6 +371,23 @@ async def download(url):
                 return res
 
 
+def get_filename(parts, prefix = "", extension=".png"):
+    """info to filename"""
+    res = None
+    for part in parts:
+        if res is None:
+            res = f"{prefix}{part}"
+        else:
+            res = f"{res}_{part}"
+    return f"{res}{extension}"
+
+
+def save(blob, filename):
+    """blob to url"""
+    with open(filename, "wb") as output:
+        output.write(blob)
+
+
 def resize(width, height, filename=None, blob=None):
     """Resize image and make blob, pass either filename or blob"""
     with Image(filename=filename, blob=blob) as img:
