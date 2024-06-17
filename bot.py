@@ -225,7 +225,15 @@ async def on_ready():
 @listen()
 async def on_message_create(ctx: MessageCreate):
     """When the discord bot sees a message"""
-    images = tools.get_image_attachements(ctx.message)
+    # Check input and fetch from database
+    message = ctx.message
+    guild_error = tools.check_in_guild(message)
+    if guild_error is not None:
+        return
+    is_setup, db_guild = tools.check_guild_setup(message.guild.id)
+    if not is_setup or db_guild[dao.guilds.SUBMISSION_CHANNEL] != message.channel.id:
+        return
+    images = tools.get_image_attachements(message)
     if len(images) > 0:
         return await business.image_received(ctx, images)
 
