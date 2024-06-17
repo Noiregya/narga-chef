@@ -775,13 +775,12 @@ async def achievement_list(ctx: SlashContext):
     if len(achievement_embeds) < 1:
         return await ctx.send("No achievements yet!")
     channel = ctx.channel
-    file, embed = achievement_embeds[0]
-    res = await ctx.send(file=file, embed=embed)
+    await ctx.defer(ephemeral=True)
     if len(achievement_embeds) > 1:
-        for embed_pair in achievement_embeds[1:]:
+        for embed_pair in achievement_embeds:
             file, embed = embed_pair
             await channel.send(file=file, embed=embed)
-    return res
+    return await ctx.send("Achievement list generated")
     #return await paginator.send(ctx)
 
 
