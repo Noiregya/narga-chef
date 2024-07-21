@@ -16,7 +16,7 @@ def insert(cursor, guild_id, a_name, icon, condition):
 def select(cursor, guild, ident = None, a_name = None, icon = None, condition = None):
     """Select constructed depending on the parameters that's given to it"""
     req = (f"SELECT guild, ident, a_name, icon, condition FROM {TABLE_NAME}"
-        " where guild=%s")
+        " where guild=%s ")
     parm = []
     parm.insert(0, guild)
     if ident is not None:
@@ -36,13 +36,13 @@ def select(cursor, guild, ident = None, a_name = None, icon = None, condition = 
 
 def delete(cursor, guild, ident = None, a_name = None):
     """Delete an element from the database"""
-    req = f"DELETE FROM {TABLE_NAME} WHERE "
+    req = f"DELETE FROM {TABLE_NAME} WHERE guild=%s "
     parm = []
     parm.insert(0, guild)
     if ident is not None:
         req = f"{req}AND ident=ANY(%s) "
         parm.insert(len(parm),ident)
     if a_name is not None:
-        req = f"{req}AND ident=%s "
+        req = f"{req}AND a_name=%s "
         parm.insert(len(parm),a_name)
     cursor.execute(req,parm)

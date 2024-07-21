@@ -243,6 +243,7 @@ def get_request_attribution(guild_id, member_id, ident = None):
         with connection.cursor() as cursor:
             return request_attr.select(cursor, guild_id, member_id, ident)
 
+
 def insert_achievement(guild_id, a_name, icon, condition):
     """Insert a reward in the database"""
     with psycopg.connect(connection_string) as connection:
@@ -269,3 +270,10 @@ def award_achievement(guild, member, achievement):
     with psycopg.connect(connection_string) as connection:
         with connection.cursor() as cursor:
             return achievement_attr.insert(cursor, guild, member, achievement)
+
+
+def achievement_delete(guild_id, a_name):
+    with psycopg.connect(connection_string) as connection:
+        with connection.cursor() as cursor:
+            return achievements.delete(cursor, guild_id, a_name=a_name)
+            

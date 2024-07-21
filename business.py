@@ -733,3 +733,13 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
         next_req_str=next_req_str,
     )
     return png
+
+
+async def delete_achievement(guild_id, a_name):
+    """Removes an achievement"""
+    try:
+        dao.achievement_delete(guild_id, a_name)
+    except psycopg.Error as e:
+        logging.error(e)
+        return f"Could not delete this achievement. {e}"
+    return f"{a_name} removed"
