@@ -1,6 +1,7 @@
 """Reusable unitary functions"""
 
 # Imports
+import os
 import logging
 from datetime import datetime
 import json
@@ -20,6 +21,8 @@ import dao.members as members
 import dao.guilds as guilds
 import dao.requests as requests
 import dao.rewards as rewards
+import dao.achievements as achievements
+import render.render as render
 
 ONE_HOUR = 3600
 PURPLE = "#7f03fc"
@@ -81,6 +84,33 @@ def generate_guild_card_embed(db_member, db_guild, rank):
         fields=[points, balance, rank, cooldown],
     )
     return embed
+
+
+def generate_achievements(db_achievements):
+    """Generate a leaderboard in a list of achievements to be paginated"""
+    embed_pairs = []
+    for ach in db_achievements:
+        db_ident = str(ach[achievements.IDENT])
+        filename = render.get_filename(["ach", ach[achievements.GUILD], db_ident], extension=".png")
+        path = os.path.abspath(f"render/{filename}")
+        render.save(ach[achievements.ICON], path)
+        ident = EmbedField(
+            name="Decription: ",
+            value=ach[achievements.DESCRIPTION],
+        )
+        condition = EmbedField(
+            name="Condition: ",
+            value=ach[achievements.CONDITION],
+        )
+        embed = Embed(
+            color=PINK,
+            title=ach[achievements.NAME],
+            fields=[ident, condition],
+        )
+        embed.set_footer(f"Id: {db_ident}")
+        embed.set_thumbnail(f"attachment://{filename}")
+        embed_pairs.append((path, embed))
+    return embed_pairs
 
 
 def generate_leaderboard(db_leaderboard, currency):

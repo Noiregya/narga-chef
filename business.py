@@ -442,6 +442,7 @@ def award_request(
     guild_id, member_id, ident = None, request_type=None, request_name=None, request_effect=None
 ):
     """award a request to a user"""
+    list_ident = None
     if ident is not None:
         list_ident = [ident]
     db_requests = dao.get_requests(
@@ -491,11 +492,14 @@ def generate_shop(db_guild, roles):
 
 def give_reward(guild_id, member_id, ident):
     """give a reward to a member"""
+    db_reward = dao.get_rewards(guild_id, list_ident=[ident])
+    if len(db_reward) == 0:
+        return f"No reward with ident {ident}"
     try:
         dao.award_reward(guild_id, member_id, ident)
     except psycopg.Error as e:
         print(e)
-        return f"Error adding reward"
+        return "Error adding reward"
     return "Reward added"
 
 
@@ -511,7 +515,7 @@ async def award_reward(ctx, ident):
         content = "Couldn't give this award, you already have it"
         return [content, error]
     dao.award_reward(guild_id, member_id, ident)
-    db_rewards = dao.get_rewards(guild_id, list_ident=ident)
+    db_rewards = dao.get_rewards(guild_id, list_ident=[ident])
     if len(db_rewards) < 1:
         error = True
         content = f"Reward number {ident} doesn't exist anymore, ask an admin for help"
@@ -531,7 +535,7 @@ async def toggle_role_reward(ctx, ident):
     content = None
     guild_id = ctx.guild.id
     user = ctx.author
-    db_rewards = dao.get_rewards(guild_id, nature="role", list_ident=ident)
+    db_rewards = dao.get_rewards(guild_id, nature="role", list_ident=[ident])
     if len(db_rewards) == 0:
         return "This role can't be obtained anymore"
     db_reward = db_rewards[0]
@@ -637,7 +641,7 @@ def missing_condition(requests_lst, rewards_lst, db_requests, db_rewards):
     return (missing_req, missing_rew)
 
 
-async def add_achievement(guild_id, name, image, condition):
+async def add_achievement(guild_id, name, image, condition, description):
     """Add the following achievement"""
     is_parsed, conditions = tools.parse_condition(condition)
     blob = await render.download(image.url)
@@ -664,7 +668,7 @@ async def add_achievement(guild_id, name, image, condition):
             f"Requests {missing_req}, Rewards {missing_rew}")
     json_condition = json.dumps({"requests":requests_lst, "rewards":rewards_lst, "points":points})
     try:
-        dao.insert_achievement(guild_id, name, icon, json_condition)
+        dao.insert_achievement(guild_id, name, icon, json_condition, description)
     except psycopg.Error as e:
         logging.error(e)
         return (
@@ -675,14 +679,7 @@ async def add_achievement(guild_id, name, image, condition):
 def list_achievements(guild_id):
     """Make a string of all the achievements"""
     db_achievements = dao.select_achievements(guild_id)
-    achievements_str = "\n".join(
-        f"{req[achievements.IDENT]};"
-        f"{req[achievements.NAME]};"
-        #f"{req[achievements.ICON]};"
-        f"{req[achievements.CONDITION]}"
-        for req in db_achievements
-    )
-    return "Id ;Name; Condition; Points\n" f"{achievements_str}"
+    return tools.generate_achievements(db_achievements)
 
 
 async def get_card_image(db_member, db_guild, rank, pfp=None):

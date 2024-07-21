@@ -36,7 +36,7 @@ def select(cursor, guild, list_ident = None, name = None, condition = None, natu
         req = f"{req}AND r_role=%s "
         parm.insert(len(parm),r_role)
     parm.insert(0, guild)
-    req = f"{req}ORDER BY nature "
+    req = f"{req}ORDER BY ident"
     cursor.execute(req,parm)
     return cursor.fetchall()
 

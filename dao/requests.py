@@ -63,6 +63,7 @@ def select(cursor, guild, ident = None, request_type = None, request_name = None
         req = f"{req}AND ident=ANY(%s) "
         parm.insert(len(parm),list_ident)
     parm.insert(0, guild)
+    req = f"{req}ORDER BY ident"
     cursor.execute(req, parm)
     return cursor.fetchall()
     

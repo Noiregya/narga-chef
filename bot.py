@@ -225,7 +225,15 @@ async def on_ready():
 @listen()
 async def on_message_create(ctx: MessageCreate):
     """When the discord bot sees a message"""
-    images = tools.get_image_attachements(ctx.message)
+    # Check input and fetch from database
+    message = ctx.message
+    guild_error = tools.check_in_guild(message)
+    if guild_error is not None:
+        return
+    is_setup, db_guild = tools.check_guild_setup(message.guild.id)
+    if not is_setup or db_guild[dao.guilds.SUBMISSION_CHANNEL] != message.channel.id:
+        return
+    images = tools.get_image_attachements(message)
     if len(images) > 0:
         return await business.image_received(ctx, images)
 
@@ -471,7 +479,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     required=True,
 )
 async def request_add(
-    ctx: SlashContext, request_type: str, name: str, effect: str, value: str
+    ctx: SlashContext, request_type: str, request_name: str, request_effect: str, value: str
 ):
     """Request register command have been received"""
     # Check input and fetch from database
@@ -482,7 +490,7 @@ async def request_add(
     if not is_setup:
         return await ctx.send(error)
     # Update DB
-    res = business.add_request(ctx, request_type, name, effect, value)
+    res = business.add_request(ctx, request_type, request_name, request_effect, value)
     # Respond
     return await ctx.send(res)
 
@@ -737,8 +745,14 @@ async def request_completed(
     required=True,
     opt_type=OptionType.STRING,
 )
+@slash_option(
+    name="description",
+    description="Description for the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
 async def achievement_add(
-    ctx: SlashContext, name: str, image: Attachment, condition: str
+    ctx: SlashContext, name: str, image: Attachment, condition: str, description: str
 ):
     """Add an achievement"""
     guild_error = tools.check_in_guild(ctx)
@@ -747,7 +761,7 @@ async def achievement_add(
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    res = await business.add_achievement(ctx.guild.id, name, image, condition)
+    res = await business.add_achievement(ctx.guild.id, name, image, condition, description)
     return await ctx.send(res, ephemeral=True)
 
 
@@ -764,9 +778,18 @@ async def achievement_list(ctx: SlashContext):
     is_setup, error = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(error)
-    achievements_str = business.list_achievements(ctx.guild.id)
-    paginator = Paginator.create_from_string(bot, achievements_str, page_size=1000)
-    return await paginator.send(ctx)
+    achievement_embeds = business.list_achievements(ctx.guild.id)
+    #paginator = Paginator.create_from_embeds(bot, *achievements_embeds)#Paginator.create_from_string(bot, achievements_str, page_size=1000)
+    if len(achievement_embeds) < 1:
+        return await ctx.send("No achievements yet!")
+    channel = ctx.channel
+    await ctx.defer(ephemeral=True)
+    if len(achievement_embeds) > 1:
+        for embed_pair in achievement_embeds:
+            file, embed = embed_pair
+            await channel.send(file=file, embed=embed)
+    return await ctx.send("Achievement list generated")
+    #return await paginator.send(ctx)
 
 
 @slash_command(
