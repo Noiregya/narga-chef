@@ -18,6 +18,8 @@ DB_NAME = os.environ.get("db_name")
 PORT = os.environ.get("port")
 SQL_DIRECTORY = "dao/sql/"
 
+connection_string = f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
+
 def get_sql_to_execute(current):
     """Get the list of SQL scripts to run for the update"""
     files = os.listdir(SQL_DIRECTORY)
@@ -29,9 +31,7 @@ def run_updates():
     """Updates the database and returns True if an update has been done"""
     version = "0.0.0"
     try:
-        with psycopg.connect(
-            f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
-        ) as gen_connection:
+        with psycopg.connect(connection_string) as gen_connection:
             with gen_connection.cursor() as gen_cursor:
                 try:
                     gen_cursor.execute("SELECT data_model_version FROM metanarga;")
@@ -46,9 +46,7 @@ def run_updates():
                 HOST, DB_USER, DB_NAME,
             )
         )
-    with psycopg.connect(
-        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
-    ) as connection:
+    with psycopg.connect(connection_string) as connection:
         with connection.cursor() as cursor:
             to_execute = get_sql_to_execute(version)
             for sql in to_execute:
