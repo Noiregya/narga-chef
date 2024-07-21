@@ -21,6 +21,7 @@ HOST = os.environ.get("host")
 PASSWORD = os.environ.get("password")
 DB_USER = os.environ.get("db_user")
 DB_NAME = os.environ.get("db_name")
+PORT = os.environ.get("port")
 
 # connection = psycopg.connect(f"dbname=narga user=narga host={HOST} password={PASSWORD}")
 
@@ -36,7 +37,7 @@ def setup(
 ):
     # Reconnecting everytime because else the connect object will go out of scope
     with psycopg.connect(
-        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
     ) as connection:
         with connection.cursor() as cursor:
             if guild_exists(cursor, guild_id):

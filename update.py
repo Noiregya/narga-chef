@@ -15,6 +15,7 @@ HOST = os.environ.get("host")
 PASSWORD = os.environ.get("password")
 DB_USER = os.environ.get("db_user")
 DB_NAME = os.environ.get("db_name")
+PORT = os.environ.get("port")
 SQL_DIRECTORY = "dao/sql/"
 
 def get_sql_to_execute(current):
@@ -29,7 +30,7 @@ def run_updates():
     version = "0.0.0"
     try:
         with psycopg.connect(
-            f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+            f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
         ) as gen_connection:
             with gen_connection.cursor() as gen_cursor:
                 try:
@@ -46,7 +47,7 @@ def run_updates():
             )
         )
     with psycopg.connect(
-        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD}"
+        f"dbname={DB_NAME} user={DB_USER} host={HOST} password={PASSWORD} port={PORT}"
     ) as connection:
         with connection.cursor() as cursor:
             to_execute = get_sql_to_execute(version)
