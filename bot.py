@@ -862,4 +862,32 @@ async def autocomplete_request_effect(ctx: AutocompleteContext):
     )
 
 
+
+@slash_command(
+    name="achievement_delete",
+    description="Deletes an existing achievment",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+)
+@slash_option(
+    name="achievement_name",
+    description="Name of the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+async def achievement_delete(ctx: SlashContext, achievement_name: str):
+    """Achievement delete command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    await business.delete_achievement(ctx.guild.id, achievement_name)
+    # Respond
+    return await ctx.send(
+        f"{achievement_name} has been removed"
+    )
+
 bot.start(TOKEN)
