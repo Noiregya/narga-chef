@@ -153,7 +153,7 @@ async def accept_component(ctx, req_member, unique, value):
     clear_events(unique, req_member)
     return await ctx.edit_origin(
         content=(
-            f"Request accepted by <@{ctx.member.id}>"
+            f"Request accepted by <@{ctx.member.id}>\n"
             f"{award_res}\n"
             f"{value} points awarded to {member_pings}\n{image_string}"
         ),
