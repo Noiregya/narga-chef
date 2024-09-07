@@ -285,10 +285,10 @@ async def notify_member(
             f" and you have been awarded {points} points"
         )
     else:
-        content = f"<@{ctx.user.id}> denied your request"
+        content = f"Unfortunately, <@{ctx.user.id}> denied your request"
     if reason is not None:
         content = f"{content} here's why:\n{reason}"
-    return await message.reply(f"{member_pings}{content}")
+    return await message.reply(f"{member_pings} {content}")
 
 
 def clear_events(unique, member):
