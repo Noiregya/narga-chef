@@ -716,7 +716,6 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
             next_req_str = "You can submit now"
         else:
             next_req_str = f"Submit in: {tools.human_readable_delta(delta)}"
-
     render.generate_guild_card(
         png,
         member_id,
