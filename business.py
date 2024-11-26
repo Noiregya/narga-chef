@@ -119,6 +119,13 @@ async def effect_component(ctx, effect, event_type, req_member, unique):
 
 async def accept_component(ctx, req_member, unique, value):
     """A component received when a user clicks the accept button"""
+    lock = eventDictionnary.get(f"lock,{req_member},{unique}")
+    if lock is True:
+        return await ctx.send(
+            content=("Someone else is already interacting"),
+            ephemeral=True
+        )
+    eventDictionnary[f"lock,{req_member},{unique}"] = True
     image_string = eventDictionnary.get(f"image,{req_member},{unique}")
     if image_string is None:
         return await ctx.edit_origin(
@@ -150,8 +157,7 @@ async def accept_component(ctx, req_member, unique, value):
         # Send messages
         member_pings = member_pings + f"<@{user}> "
     await notify_member(ctx, member_pings, unique, value, fulfilled=True)
-    clear_events(unique, req_member)
-    return await ctx.edit_origin(
+    res = await ctx.edit_origin(
         content=(
             f"Request accepted by <@{ctx.member.id}>\n"
             f"{award_res}\n"
@@ -159,10 +165,19 @@ async def accept_component(ctx, req_member, unique, value):
         ),
         components=[],
     )
+    clear_events(unique, req_member)
+    return res
 
 
 async def deny_component(ctx, req_member, unique, value):
     """A component received when a user clicks the deny button"""
+    lock = eventDictionnary.get(f"lock,{req_member},{unique}")
+    if lock is True:
+        return await ctx.send(
+            content=("Someone else is already interacting"),
+            ephemeral=True
+        )
+    eventDictionnary[f"lock,{req_member},{unique}"] = True
     guild = ctx.guild.id
     member = ctx.member.id
     db_member = dao.get_member(guild, member)
@@ -185,18 +200,19 @@ async def deny_component(ctx, req_member, unique, value):
         db_member[members.NEXT_SUBMISSION_TIME], db_guild[guilds.COOLDOWN]
     )
     dao.update_cooldown(guild, member, next_submission_time)
-    clear_events(unique, req_member)
     await notify_member(
         ctx, f"<@{req_member}>", unique, value, reason=paragraph, fulfilled=False
     )
     await modal_ctx.send(content="Processing", ephemeral=True, delete_after=1.0)
-    return await ctx.message.edit(
+    res = await ctx.message.edit(
         content=(
             f"Request from <@{req_member}> denied by <@{ctx.member.id}>"
             f" for reason:\n{paragraph}\n{image_string}"
         ),
         components=[],
     )
+    clear_events(unique, req_member)
+    return res
 
 
 async def buy_component(ctx, nature, ident, cost):
@@ -294,9 +310,11 @@ async def notify_member(
 def clear_events(unique, member):
     """Delete the event from the event dictionnary"""
     try:
+        del eventDictionnary[f"type,{unique},{member}"]
         del eventDictionnary[f"name,{unique},{member}"]
         del eventDictionnary[f"effect,{unique},{member}"]
         del eventDictionnary[f"image,{unique},{member}"]
+        del eventDictionnary[f"lock,{unique},{member}"]
     except KeyError:
         logging.info("Unable to delete event from the dictionnary")
 
@@ -456,7 +474,7 @@ def award_request(
         dao.award_request(guild_id, member_id, ident)
     except psycopg.Error:
         pass
-    return (f"<@{member_id}> is considered as having completed request {ident}")
+    return f"<@{member_id}> is considered as having completed request {ident}"
 
 
 async def update_rewards(guild_id, member, current_points):
@@ -643,6 +661,7 @@ def missing_condition(requests_lst, rewards_lst, db_requests, db_rewards):
 
 async def add_achievement(guild_id, name, image, condition, description):
     """Add the following achievement"""
+    no_condition = False
     is_parsed, conditions = tools.parse_condition(condition)
     blob = await render.download(image.url)
     icon = render.resize(render.SMALL_ICON, render.SMALL_ICON, blob = blob)
