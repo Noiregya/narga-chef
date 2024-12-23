@@ -48,6 +48,7 @@ bot = Client(intents=intents, delete_unused_application_cmds=IS_UPDATED)
     name="request_list",
     description="List all the requests",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+    dm_permission=False,
 )
 @slash_option(
     name="request_type",
@@ -75,6 +76,7 @@ async def request_list(ctx: SlashContext, request_type: str):
     name="complete_request",
     description="Complete a request for a user",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -110,6 +112,7 @@ async def complete_request(
     request_type: str,
     request_name: str,
     request_effect: str,
+    dm_permission=False,
 ):
     """Complete request command have been received"""
     # Check input and fetch from database
@@ -134,6 +137,7 @@ async def complete_request(
     name="complete_reward",
     description="Complete a reward for a user",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -152,6 +156,7 @@ async def complete_reward(
     ctx: SlashContext,
     member: Member,
     ident: int,
+    dm_permission=False,
 ):
     """Complete request command have been received"""
     # Check input and fetch from database
@@ -169,6 +174,7 @@ async def complete_reward(
     name="request_delete",
     description="Delete a request",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="request_type",
@@ -290,6 +296,7 @@ async def on_component(event: Component):
     name="setup",
     description="Set up the bot for this server",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="currency",
@@ -362,6 +369,7 @@ async def setup(
     name="card",
     description="Show the guild card for the specified member",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -399,6 +407,7 @@ async def card(ctx: SlashContext, member: Member = None):
     name="leaderboard",
     description="Show the guild card for the specified member",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+    dm_permission=False,
 )
 async def leaderboard(ctx: SlashContext):
     """Card command have been received"""
@@ -422,6 +431,7 @@ async def leaderboard(ctx: SlashContext):
     name="cooldown_reset",
     description="Reset a member's cooldown",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -450,6 +460,7 @@ async def cooldown_reset(ctx: SlashContext, member: Member = None):
     name="request_add",
     description="Register a request and set its value",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="request_type",
@@ -499,6 +510,7 @@ async def request_add(
     name="points_add",
     description="Add points to a certain user",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -528,6 +540,7 @@ async def points_add(ctx: SlashContext, member: Member, points: int):
     name="points_sub",
     description="Add points to a certain user",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -557,6 +570,7 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     name="reward_add",
     description="Add a reward that users can get when gaining points",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 # @slash_option(
 #    name="reward_type",
@@ -623,6 +637,7 @@ async def reward_add(
     name="reward_delete",
     description="Remove a reward",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="ident",
@@ -648,6 +663,7 @@ async def reward_delete(ctx: SlashContext, ident: int):
     name="reward_list",
     description="View all the rewards in the guild",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+    dm_permission=False,
 )
 async def reward_list(ctx: SlashContext):
     """Respond with a list of all the rewards currently in the guild"""
@@ -666,6 +682,7 @@ async def reward_list(ctx: SlashContext):
     name="reward_completed",
     description="See what rewards a user have completed",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -696,6 +713,7 @@ async def reward_completed(
     name="request_completed",
     description="See what requests a user have completed",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="member",
@@ -726,6 +744,7 @@ async def request_completed(
     name="achievement_add",
     description="Add an achievement",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 @slash_option(
     name="name",
@@ -769,6 +788,7 @@ async def achievement_add(
     name="achievement_list",
     description="View all the achievements in the guild",
     default_member_permissions=Permissions.USE_APPLICATION_COMMANDS,
+    dm_permission=False,
 )
 async def achievement_list(ctx: SlashContext):
     """Respond with a list of all the achievements currently in the guild"""
@@ -796,6 +816,7 @@ async def achievement_list(ctx: SlashContext):
     name="shop",
     description="Generates a shop in the current channel with all the rewards",
     default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
 )
 async def generate_shop(ctx: SlashContext):
     """Generates a shop in the current channel with all the rewards"""
@@ -818,6 +839,33 @@ async def generate_shop(ctx: SlashContext):
             )
     return await ctx.send(content="Shop have been generated")
 
+@slash_command(
+    name="achievement_delete",
+    description="Deletes an existing achievment",
+    default_member_permissions=Permissions.MANAGE_GUILD,
+    dm_permission=False,
+)
+@slash_option(
+    name="achievement_name",
+    description="Name of the achievement",
+    required=True,
+    opt_type=OptionType.STRING,
+)
+async def achievement_delete(ctx: SlashContext, achievement_name: str):
+    """Achievement delete command have been received"""
+    # Check input and fetch from database
+    guild_error = tools.check_in_guild(ctx)
+    if guild_error is not None:
+        return await ctx.send(guild_error)
+    is_setup, error = tools.check_guild_setup(ctx.guild.id)
+    if not is_setup:
+        return await ctx.send(error)
+    # Business
+    await business.delete_achievement(ctx.guild.id, achievement_name)
+    # Respond
+    return await ctx.send(
+        f"{achievement_name} has been removed"
+    )
 
 @global_autocomplete("request_type")
 async def autocomplete_request_type(ctx: AutocompleteContext):
@@ -859,35 +907,6 @@ async def autocomplete_request_effect(ctx: AutocompleteContext):
     )
     return await ctx.send(
         choices=auto_complete.autocomplete_from_options(options, string_option_input)
-    )
-
-
-
-@slash_command(
-    name="achievement_delete",
-    description="Deletes an existing achievment",
-    default_member_permissions=Permissions.MANAGE_GUILD,
-)
-@slash_option(
-    name="achievement_name",
-    description="Name of the achievement",
-    required=True,
-    opt_type=OptionType.STRING,
-)
-async def achievement_delete(ctx: SlashContext, achievement_name: str):
-    """Achievement delete command have been received"""
-    # Check input and fetch from database
-    guild_error = tools.check_in_guild(ctx)
-    if guild_error is not None:
-        return await ctx.send(guild_error)
-    is_setup, error = tools.check_guild_setup(ctx.guild.id)
-    if not is_setup:
-        return await ctx.send(error)
-    # Business
-    await business.delete_achievement(ctx.guild.id, achievement_name)
-    # Respond
-    return await ctx.send(
-        f"{achievement_name} has been removed"
     )
 
 bot.start(TOKEN)
