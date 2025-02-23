@@ -41,6 +41,8 @@ TOKEN = os.environ.get("token")
 intents = Intents.MESSAGE_CONTENT | Intents.GUILD_MESSAGES | Intents.GUILDS
 
 IS_UPDATED = update.run_updates()
+ROLE = "role"
+THEME = "theme"
 bot = Client(intents=intents, delete_unused_application_cmds=IS_UPDATED)
 
 
@@ -572,11 +574,16 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     default_member_permissions=Permissions.MANAGE_GUILD,
     dm_permission=False,
 )
-# @slash_option(
-#    name="reward_type",
-#    description="Type of the reward to award users",
-#    required=True,
-# )
+@slash_option(
+    name="nature",
+    description="Type of the reward",
+    opt_type=OptionType.STRING,
+    required=True,
+    choices=[
+        SlashCommandChoice(name="Role", value=ROLE),
+        SlashCommandChoice(name="Theme", value=THEME),
+    ],
+)
 @slash_option(
     name="name",
     description="Name of the reward",
@@ -607,31 +614,31 @@ async def points_sub(ctx: SlashContext, member: Member, points: int):
     opt_type=OptionType.INTEGER,
 )
 async def reward_add(
-    ctx: SlashContext, name: str, condition: str, role: Role = None, points_required: int = 0
+    ctx: SlashContext, nature: str, name: str, condition: str,
+    role: Role = None, points_required: int = 0
 ):
     """Add a reward that users can get when gaining points"""
-    # Planned to add rewards that are other than roles, as well as rewards that are "buyable" instead of milestones
     guild_error = tools.check_in_guild(ctx)
     if guild_error is not None:
         return await ctx.send(guild_error)
     is_setup, db_guild = tools.check_guild_setup(ctx.guild.id)
     if not is_setup:
         return await ctx.send(db_guild)
-    if (role is None or points_required == 0) and condition != "given":
-        return await ctx.send("Error adding the reward, please specify a role and a point amount "
-            "if the type is not given", ephemeral = True)
-    role_id = 0
+    if ((role is None and nature is ROLE) or (points_required < 0 and condition != "given")):
+        return await ctx.send("Error adding the reward, make sure all the required information "
+            "have been input if the type is not given", ephemeral = True)
+    role_id = None
     if role is not None:
         role_id = role.id
     return await business.add_reward(
         ctx,
         name,
         points_required,
+        nature,
         role_id = role_id,
         condition = condition,
         currency = db_guild[dao.guilds.CURRENCY],
     )
-
 
 @slash_command(
     name="reward_delete",
@@ -799,17 +806,15 @@ async def achievement_list(ctx: SlashContext):
     if not is_setup:
         return await ctx.send(error)
     achievement_embeds = business.list_achievements(ctx.guild.id)
-    #paginator = Paginator.create_from_embeds(bot, *achievements_embeds)#Paginator.create_from_string(bot, achievements_str, page_size=1000)
     if len(achievement_embeds) < 1:
         return await ctx.send("No achievements yet!")
     channel = ctx.channel
     await ctx.defer(ephemeral=True)
-    if len(achievement_embeds) > 1:
+    if len(achievement_embeds) >= 1:
         for embed_pair in achievement_embeds:
             file, embed = embed_pair
             await channel.send(file=file, embed=embed)
     return await ctx.send("Achievement list generated")
-    #return await paginator.send(ctx)
 
 
 @slash_command(

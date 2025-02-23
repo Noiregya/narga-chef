@@ -149,10 +149,17 @@ def add_points(guild_id, member_id, points):
         with connection.cursor() as cursor:
             return members.add_points(cursor, guild_id, member_id, points)
 
+
 def add_spent(guild_id, member_id, points):
     with psycopg.connect(connection_string) as connection:
         with connection.cursor() as cursor:
             return members.add_spent(cursor, guild_id, member_id, points)
+
+
+def set_theme(guild_id, member_id, theme):
+    with psycopg.connect(connection_string) as connection:
+        with connection.cursor() as cursor:
+            return members.set_theme(cursor, guild_id, member_id, theme)
 
 
 def guild_exists(cursor, guild_id):
@@ -164,7 +171,7 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
     """Create member if it doesn't exist, update its nickname then gets it"""
     db_member = members.select(cursor, guild_id, member_id)
     if db_member is None:
-        members.insert(cursor, guild_id, member_id, nickname, 0, 0, datetime.min, None)
+        members.insert(cursor, guild_id, member_id, nickname, 0, 0, datetime.min, None, 0)
         db_member = members.select(cursor, guild_id, member_id)
     else:  # Update nickname for database maintenability
         members.update(
@@ -176,6 +183,7 @@ def refresh_and_get_member(cursor, guild_id, member_id, nickname):
             db_member[members.SPENT],
             db_member[members.NEXT_SUBMISSION_TIME],
             db_member[members.LAST_SUBMISSION],
+            db_member[members.THEME],
         )
     return db_member
 

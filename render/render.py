@@ -1,41 +1,61 @@
 """Renders various graphics"""
 
 import os
-import base64
+#import base64
+import glob
+import importlib
 from datetime import datetime, timedelta
-import math
+from os.path import dirname, basename, isfile, join
 import aiohttp
 from dotenv import load_dotenv
-from wand.image import Image, CHANNELS
+from wand.image import Image
 from wand.exceptions import BaseError
 from wand.color import Color
 from wand.drawing import Drawing
 from wand.compat import nested
+import render.render_tools as render_tools
+import render.themes as themes
 
 load_dotenv()
-FONT_FAMILY = os.environ.get("font_family")
+THEME_DIR = "themes"
 CACHE_DURATION = os.environ.get("cache_duration") or "24"
 CACHE_DURATION = int(CACHE_DURATION)
 # Recommanded size for guild cards: 960x540
 # TEMP_DIR = "render/"
 TEMP_DIR = os.path.abspath("")
-WIDTH = 540
-HEIGHT = 300
-TRANSPARENT = Color("transparent")
 ACCENT_COLOR = "#7fc1ff"
-SPACE = 5
-TAB = 10
-RX = 10
 ICON_SIZE = 96
-TITLE_SIZE = 35
-FONT_SIZE = 20
 SMALL_ICON = 48
 S_RX = 5
-STROKE = 3
 NB_COL = 9
 
-MARGIN = TAB * 3
+WIDTH = 540
+HEIGHT = 300
 
+
+def load_theme(theme_name):
+    """Loads one of the themes from the database"""
+    all_themes = list_themes()
+    try:
+        pkg = importlib.import_module(f".{theme_name}", "render.themes")
+    except ImportError:
+        name =  all_themes[0]
+        pkg = importlib.import_module(f".{name}", "render.themes")
+    return pkg.init(WIDTH, HEIGHT)
+
+def list_themes():
+    """List all the themes available"""
+    modules = glob.glob(join(f"{dirname(__file__)}/{THEME_DIR}", "*.py"))
+    return [ basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
+
+
+def check_theme_exist(theme_name):
+    """Return an error if the theme doesn't exist"""
+    all_themes = list_themes()
+    for theme in all_themes:
+        if theme == theme_name:
+            return False
+    return f"List of available themes: {all_themes}"
 
 def generate_guild_card(
     path,
@@ -45,6 +65,7 @@ def generate_guild_card(
     balance,
     points,
     rank,
+    theme,
     achievements=None,
     pfp=None,
     next_req_str=None,
@@ -52,304 +73,31 @@ def generate_guild_card(
     """Renders a guild card to a picture"""
     if achievements is None:
         achievements = []
-    with nested(TRANSPARENT, Color("#000000AA"), Drawing()) as (bg, fg, draw):
-        draw.stroke_width = STROKE
-        # Background
-        snowflake_generator(draw, WIDTH, HEIGHT, discord_id)
-        draw_rect(
-            draw,
-            RX,
-            RX,
-            WIDTH - RX * 2,
-            HEIGHT - RX * 2,
-            fill=fg,
-            outline=ACCENT_COLOR,
-            radius=RX,
-        )
+
+    # Draw background
+    with nested(render_tools.TRANSPARENT, Color("#00000000"), Drawing()) as (b_bg, b_fg, bg_canvas):
+        theme.render_background(bg_canvas, seed = discord_id)
+
+    with nested(render_tools.TRANSPARENT, Color("#00000000"), Drawing()) as (bg, fg, canvas):
+        theme.render_border(canvas)
         # Title
-        title_height = round(MARGIN + (TITLE_SIZE / 2) + SPACE)
-        draw_text(
-            draw,
-            MARGIN,
-            title_height,
-            name,
-            ACCENT_COLOR,
-            font_size=TITLE_SIZE,
-            font_weight=600,
-        )
-
-        line_h = title_height + FONT_SIZE + SPACE
-        line_w = MARGIN + SPACE
-        draw_text(
-            draw,
-            line_w,
-            line_h,
-            f"Rank {rank}",
-            ACCENT_COLOR,
-            font_size=FONT_SIZE,
-            font_weight=400,
-        )
-
-        line_h = line_h + FONT_SIZE + SPACE
+        theme.render_title(canvas, name)
+        theme.render_text(canvas, f"Rank {rank}")
         if next_req_str is not None:
-            draw_text(
-                draw,
-                line_w,
-                line_h,
-                next_req_str,
-                ACCENT_COLOR,
-                font_size=FONT_SIZE,
-                font_weight=400,
-            )
+            theme.render_text(canvas, next_req_str)
 
-        line_h = line_h + FONT_SIZE + SPACE
-        draw_text(
-            draw,
-            line_w,
-            line_h,
-            currency,
-            ACCENT_COLOR,
-            font_size=FONT_SIZE,
-            font_weight=600,
-        )
+        theme.render_text_bold(canvas, currency)
+        theme.render_text(canvas, f"Total: {points} Balance: {balance}")
+        theme.render_text_bold(canvas, "Achievements")
 
-        line_h = line_h + FONT_SIZE + SPACE
-        draw_text(
-            draw,
-            line_w,
-            line_h,
-            f"Total: {points} Balance: {balance}",
-            ACCENT_COLOR,
-            font_size=FONT_SIZE,
-            font_weight=400,
-        )
-
-        line_h = line_h + FONT_SIZE + SPACE
-        draw_text(
-            draw,
-            MARGIN,
-            line_h,
-            "Achievements",
-            ACCENT_COLOR,
-            font_size=FONT_SIZE,
-            font_weight=600,
-        )
-        image_desc = []
         # PFP
         if pfp is not None:
-            image_desc.append(
-                {
-                    "path": pfp,
-                    "x": WIDTH - ICON_SIZE - MARGIN,
-                    "y": MARGIN,
-                    "outline": TRANSPARENT,
-                    "radius": RX,
-                }
-            )
-        line_h = line_h + SPACE
-        for i, achieve_icon in enumerate(achievements):
-            col = i // NB_COL
-            array_w = line_w + (i % NB_COL) * (SMALL_ICON + SPACE)
-            array_h = line_h + col * (SMALL_ICON + SPACE)
-            image_desc.append(
-                {
-                    "blob": achieve_icon,
-                    "x": array_w,
-                    "y": array_h,
-                    "outline": TRANSPARENT,
-                    "radius": S_RX,
-                }
-            )
-        with Image(width=WIDTH, height=HEIGHT, background=TRANSPARENT) as img:
-            draw(img)
-            overlay_images(img, image_desc)
-            img.save(filename=path)
+            theme.draw_pfp(pfp)
 
-
-def snowflake_generator(draw, width, height, seed, color=ACCENT_COLOR):
-    """Draws snowflakes"""
-    draw.push()
-    draw.stroke_color = color
-    draw.stroke_width = 1
-
-    step = 0.015 * width
-
-    s_list = list(map(int, str(seed)))
-    i = 0
-    total = 0
-    snowflakes = []
-    # define the snowflakes and their values
-    while i < 4:
-        val = round(s_list[i] * 0.15) + 3
-        snowflakes.append({"size": val})
-        i = i + 1
-        total = total + val
-    orientation = 0
-    for snowflake in snowflakes:
-        x_tenth = s_list[i % len(s_list)] * 0.1
-        y_tenth = s_list[(i + 1) % len(s_list)] * 0.1
-        x = width * (x_tenth + 0.05)
-        y = height * (y_tenth + 0.05)
-        match orientation:
-            case 0:
-                x = x % (width / 2)
-                y = y % (height / 2)
-            case 1:
-                x = x % (width / 2)
-                y = (y % (height / 2)) + height * 0.5
-            case 2:
-                x = (x % (width / 2)) + width * 0.5
-                y = y % (height / 2)
-            case 3:
-                x = (x % (width / 2)) + width * 0.5
-                y = (y % (height / 2)) + height * 0.5
-        snowflake["x"] = x
-        snowflake["y"] = y
-        i = i + 2
-        orientation = (orientation + 1) % 4
-    # Draw patterns
-    for snowflake in snowflakes:
-        size = snowflake.get("size")
-        origin = (snowflake.get("x"), snowflake.get("y"))
-        x, y = origin
-        strokes = []
-        for j in range(size):
-            ratio = s_list[i % len(s_list)]
-            prog = 2 + ratio * 0.03
-            direction = s_list[(i + 1) % len(s_list)] % 4
-            o = (x, y)  # Make a tuple for tracing
-            p = (x + prog * step, y)  # progressed coordinate
-            strokes.append([o, p])
-            match direction:
-                case 0:  # Bigger branches
-                    b_size = 4 + ratio * 0.2
-                    t_north = (p[0] + b_size * step, p[1] + b_size * step)
-                    strokes.append([p, t_north])
-                    t_south = (p[0] + b_size * step, p[1] - b_size * step)
-                    strokes.append([p, t_south])
-                case 1:  # Branches
-                    b_size = 2 + ratio * 0.2
-                    t_north = (p[0] + b_size * step, p[1] + b_size * step)
-                    strokes.append([p, t_north])
-                    t_south = (p[0] + b_size * step, p[1] - b_size * step)
-                    strokes.append([p, t_south])
-                case 2: # Smaller branches
-                    b_size = 1 + ratio * 0.1
-                    t_north = (p[0] + b_size * step, p[1] + b_size * step)
-                    strokes.append([p, t_north])
-                    t_south = (p[0] + b_size * step, p[1] - b_size * step)
-                    strokes.append([p, t_south])
-                case 3: # Crystals
-                    c_size = 2 + ratio * 0.2 # size 2 or 4
-                    x_north = p[0] + prog * step
-                    y_north = p[1] + c_size * step
-                    t_north = (x_north, y_north)
-                    tl_p = (p[0] + step, p[1])
-                    t_north_2 = (x_north + step, y_north)
-                    strokes.append([p, t_north])
-                    strokes.append([tl_p, t_north_2])
-                    strokes.append([t_north, t_north_2])
-
-                    x_south = p[0] + prog * step
-                    y_south = p[1] - c_size * step
-                    t_south = (x_south, y_south)
-                    t_south_2 = (x_south + step, y_south)
-                    strokes.append([p, t_south])
-                    strokes.append([tl_p, t_south_2])
-                    strokes.append([t_south, t_south_2])
-            x, y = p
-            i = i + 1
-        for stroke in strokes:
-            sox, soy = stroke[0]
-            sx, sy = stroke[1]
-            for a in range(6):
-                rox, roy = rotate(origin, (sox, soy), math.radians(a * 60))
-                rx, ry = rotate(origin, (sx, sy), math.radians(a * 60))
-                draw.line((rox, roy), (rx, ry))
-        strokes = []
-    draw.pop()
-
-
-def rotate(origin, point, angle):
-    """
-    Rotate a point counterclockwise by a given angle around a given origin.
-    The angle should be given in radians.
-    """
-    ox, oy = origin
-    px, py = point
-
-    qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-    qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
-    return qx, qy
-
-
-def draw_rect(
-    draw, x, y, width, height, fill=TRANSPARENT, outline=TRANSPARENT, radius=0
-):
-    draw.push()
-    draw.stroke_color = outline
-    draw.fill_color = fill
-    draw.rectangle(left=x, top=y, width=width, height=height, radius=radius)
-    draw.pop()
-
-
-def overlay_images(img, image_description):
-    for i in image_description:
-        image_parm = i.get("path")
-        if image_parm is not None:
-            image = Image(filename=image_parm).clone()
-        else:
-            try:
-                image = Image(blob=i.get("blob")).clone()
-            except BaseError as e:
-                print(f"Unable to load image {i}, error {e}")
-        x = i.get("x")
-        y = i.get("y")
-        outline = i.get("outline")
-        radius = i.get("radius")
-
-        #rounded_image = mask_edges(image, radius)
-        img.composite_channel(channel=CHANNELS["default_channels"],
-            image=image,
-            left=x,
-            top=y,
-            operator="over")
-
-
-def mask_edges(img, radius):  # TODO: doesn't work
-    res = img.clone()
-    with Image(width=res.width, height=res.height, background="black") as mask:
-        with Drawing() as ctx:
-            ctx.fill_color = Color("#FFFFFF")
-            ctx.rectangle(
-                left=0,
-                top=0,
-                width=mask.width - 1,
-                height=mask.height - 1,
-                radius=radius,
-            )
-            ctx(mask)
-        return res
-
-
-def apply_mask(image, mask):
-    with Image(
-        width=image.width, height=image.height, background=Color("transparent")
-    ) as alpha_image:
-        alpha_image.composite_channel("alpha", mask, "copy_alpha", 0, 0)
-        image.composite_channel("alpha", alpha_image, "multiply", 0, 0)
-
-
-def draw_text( #Yu Gothic Light & Yu Gothic UI
-    draw, x, y, body, color, font_family=FONT_FAMILY, font_size=20, font_weight=0
-):
-    draw.push()
-    draw.font_family = font_family
-    draw.font_size = font_size
-    draw.font_weight = font_weight
-    draw.fill_color = color
-    draw.text(x, y, body)
-    draw.pop()
+        # Achievements
+        if len(achievements) > 0:
+            theme.draw_achievements(achievements)
+        theme.save_final_render(canvas, path)
 
 
 def clear_cache(*args):

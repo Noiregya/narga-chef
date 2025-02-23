@@ -220,19 +220,22 @@ async def buy_component(ctx, nature, ident, cost):
     db_member = dao.fetch_member(ctx.guild.id, ctx.author.id, ctx.author.display_name)
     balance = db_member[members.POINTS] - db_member[members.SPENT]
     if balance >= cost:
-        content, error = await award_reward(ctx, ident)
+        content, error = await award_reward(ctx, ident) #KO
         if error:
             return content
         dao.add_spent(ctx.guild.id, ctx.author.id, cost)
+        content = await toggle_component(ctx, nature, ident=ident)
     else:
         content = f"Not enough funds, cost: {cost} balance: {balance}"
     return content
 
 
-async def toggle_component(ctx, nature, role_id):
+async def toggle_component(ctx, nature, ident):
     """A component received when a member tries to toggle a reward"""
     if nature == "role":
-        content = await toggle_role_reward(ctx, role_id)
+        content = await toggle_role_reward(ctx, ident)
+    if nature == "theme":
+        content = await toggle_theme_reward(ctx, ident)
     if content is None:
         content = f"Could not toggle {nature}"
     return content
@@ -356,17 +359,21 @@ async def add_reward(
     ctx,
     name,
     points_required,
-    role_id = 0,
+    nature = "role",
+    role_id = None,
     currency = "points",
     condition = "milestone",
-    nature = "role",
 ):
     """Adds a new reward"""
-    if condition == "given":
+    if condition == "given" or nature != "role":
         reward_string = name
     else:
         reward_string = f"{name} <@&{role_id}>"
     try:
+        if nature == "theme":
+            error = render.check_theme_exist(name)
+            if error:
+                return await ctx.send(error)
         dao.insert_reward(ctx.guild.id, name, condition, nature, role_id, points_required)
     except psycopg.Error as e:
         logging.error(e)
@@ -379,7 +386,6 @@ async def add_reward(
         f" {currency} added",
         ephemeral=True,
     )
-    #  ctx.user.add_role(reward, "Milestone reward")
 
 
 async def delete_reward(guild_id, ident):
@@ -523,7 +529,7 @@ def give_reward(guild_id, member_id, ident):
 
 async def award_reward(ctx, ident):
     """Award a reward to a member"""
-    content = None
+    content = f"Reward {ident} bought"
     error = False
     guild_id = ctx.guild.id
     member_id = ctx.author.id
@@ -538,13 +544,6 @@ async def award_reward(ctx, ident):
         error = True
         content = f"Reward number {ident} doesn't exist anymore, ask an admin for help"
         return [content, error]
-    db_reward = db_rewards[0]
-    if db_reward[dao.rewards.NATURE] == "role":
-        await ctx.author.add_role(db_reward[dao.rewards.ROLE])
-        content = f"Role <@&{db_reward[dao.rewards.ROLE]}> awarded"
-    if content is None:
-        error = True
-        content = f"Could not award reward {ident}"
     return [content, error]
 
 
@@ -572,6 +571,31 @@ async def toggle_role_reward(ctx, ident):
         content = f"Role <@&{role_id}> given"
     return content
 
+async def toggle_theme_reward(ctx, ident):
+    """Toggles a theme reward"""
+    content = None
+    guild_id = ctx.guild.id
+    user = ctx.author
+    user_id = user.id
+    db_rewards = dao.get_rewards(guild_id, nature="theme", list_ident=[ident])
+    if len(db_rewards) == 0:
+        return "This theme can't be obtained anymore"
+    db_reward = db_rewards[0]
+    name = db_reward[dao.rewards.NAME]
+    theme_id = db_reward[dao.rewards.IDENT]
+    db_award_attr = dao.get_reward_attribution(
+        guild_id, user.id, ident
+    )
+    if len(db_award_attr) == 0:
+        return "You haven't earned this reward yet"
+    db_member = dao.get_member(guild_id, user_id)
+    theme = db_member[members.THEME]
+    if theme == theme_id:
+        content = f"Theme {name} was already applied"
+    else:
+        dao.set_theme(guild_id, user_id, theme_id)
+        content = f"Theme {name} activated"
+    return content
 
 def conditions_fulfilled(db_member, db_req_attr, db_rew_attr, conditions):
     """Check if all the achievement conditions are fulfilled"""
@@ -665,6 +689,7 @@ async def add_achievement(guild_id, name, image, condition, description):
     is_parsed, conditions = tools.parse_condition(condition)
     blob = await render.download(image.url)
     icon = render.resize(render.SMALL_ICON, render.SMALL_ICON, blob = blob)
+    no_condition = False
     if is_parsed:
         requests_lst, rewards_lst, points = conditions
         no_condition = len(requests_lst) == 0 and len(rewards_lst) == 0 and points == 0
@@ -711,10 +736,15 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
     nick = db_member[members.NICKNAME]
     balance = points - db_member[members.SPENT]
     next_sub_t = db_member[members.NEXT_SUBMISSION_TIME]
+    theme_id = db_member[members.THEME]
     # Update the user's achievements
     res = f"{res}\n{update_achievements(guild_id, member_id)}"
     db_achievements = dao.select_achievements(guild_id)
     db_achievement_attr = dao.select_achievement_attr(guild_id, member_id)
+    db_theme = dao.get_rewards(guild_id, list_ident=[theme_id])
+    theme_name = "NONE"
+    if (db_theme and len(db_theme) > 0):
+        theme_name = db_theme[0][rewards.NAME]
     icon_achievements = []
     for ach in db_achievements:
         for attr in db_achievement_attr:
@@ -735,7 +765,6 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
             next_req_str = "You can submit now"
         else:
             next_req_str = f"Submit in: {tools.human_readable_delta(delta)}"
-
     render.generate_guild_card(
         png,
         member_id,
@@ -744,6 +773,7 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
         balance,
         points,
         rank,
+        theme = render.load_theme(theme_name),
         pfp=images.get("pfp"),
         achievements=icon_achievements,
         next_req_str=next_req_str,
