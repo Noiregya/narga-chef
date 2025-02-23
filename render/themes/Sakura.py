@@ -136,10 +136,14 @@ class Sakura(base_theme.BaseTheme):
         s_list = list(map(int, str(seed)))
         i = 0
         nb_max_flowers = 4
+        one_skipped = False
         while i < 4:
             val = (s_list[i] % 5) - 1
             i = i + 1
+            if val < 0 and one_skipped:
+                val = s_list[i + nb_max_flowers * 2] % 4
             if val < 0:
+                one_skipped = True
                 continue
             flower_type = sakura_path[val]
             val = s_list[i + nb_max_flowers] % 5
