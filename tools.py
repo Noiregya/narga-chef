@@ -296,38 +296,59 @@ def ordered_requests(guild_id, request_type=None, name=None, effect=None):
 def generate_shop_items(db_guild, db_rewards, roles):
     """Generate messages of each of the provided items with interactions to buy them"""
     rewards_per_nature = {}
-    roles_rewards = []
-    for role in roles:
-        try:
-            reward = next(reward for reward in db_rewards
-                if reward[rewards.NATURE] == 'role'
-                and reward[rewards.ROLE] == role.id)
-            roles_rewards.append(reward)
-        except StopIteration:
-            continue
-    
-    for reward in roles_rewards:
+    valid_rewards = []
+    for reward in db_rewards:
+        match reward[rewards.NATURE]:
+            case "role":
+                for role in roles:
+                    if reward[rewards.ROLE] == role.id:
+                        valid_rewards.append(reward)
+                        break
+            case "theme":
+                valid_rewards.append(reward)
+
+    for reward in valid_rewards:
+        name = reward[rewards.NAME]
         nature = reward[rewards.NATURE]
         reward_content = reward[rewards.ROLE]
-        ident = reward[rewards.IDENT]
         points = reward[rewards.POINTS_REQUIRED]
         reward_nature_list = rewards_per_nature.get(nature)
         reward_nature_list = [] if reward_nature_list is None else reward_nature_list
-        reward_str =  f"<@&{reward_content}>"
-        message = {
-            "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
-            "components" : ActionRow(
-                Button(
-                    style=ButtonStyle.GREEN,
-                    label="Buy",
-                    custom_id=f"buy,{nature},{ident},{points}",
-                ),Button(
-                    style=ButtonStyle.BLUE,
-                    label="Toggle",
-                    custom_id=f"toggle,{nature},{ident},none",
-                )
-            )
-        }
+        match reward[rewards.NATURE]:
+            case "role":
+                reward_str =  f"<@&{reward_content}>"
+                ident = reward[rewards.IDENT]
+                message = {
+                    "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
+                    "components" : ActionRow(
+                        Button(
+                            style=ButtonStyle.GREEN,
+                            label="Buy",
+                            custom_id=f"buy,{nature},{ident},{points}",
+                        ),Button(
+                            style=ButtonStyle.BLUE,
+                            label="Toggle",
+                            custom_id=f"toggle,{nature},{ident},none",
+                        )
+                    )
+                }
+            case "theme":
+                reward_str = name
+                ident = reward[rewards.IDENT]
+                message = {
+                    "content" : f"{nature.capitalize()} {reward_str} for {points} {db_guild[guilds.CURRENCY]}",
+                    "components" : ActionRow(
+                        Button(
+                            style=ButtonStyle.GREEN,
+                            label="Buy",
+                            custom_id=f"buy,{nature},{ident},{points}",
+                        ),Button(
+                            style=ButtonStyle.BLUE,
+                            label="Toggle",
+                            custom_id=f"toggle,{nature},{ident},none",
+                        )
+                    )
+                }
         reward_nature_list.append(message)
         rewards_per_nature[nature] = reward_nature_list
     return rewards_per_nature

@@ -45,15 +45,26 @@ def overlay_images(canvas, image_description):
     """Overlay images on the canvas"""
     for i in image_description:
         image_parm = i.get("path")
+        rotation = i.get("rotation") or 0
+        background = Color(i.get("background") or "transparent")
         if image_parm is not None:
-            image = Image(filename=image_parm).clone()
+            image = Image(filename=image_parm, background=background).clone()
         else:
             try:
                 image = Image(blob=i.get("blob")).clone()
             except BaseError as e:
                 print(f"Unable to load image {i}, error {e}")
+        image.rotate(rotation)
         x = i.get("x")
         y = i.get("y")
+        if i.get("resize"):
+            #Adjust size linearily for rotation (imperfect)
+            width = i.get("width")
+            height = i.get("height")
+            r_w = round(width + height * 0.42 * (rotation % 90) / 90)
+            r_h = round(height + width * 0.42 * (rotation % 90) / 90)
+            image.resize(width=r_w, height=r_h)
+        operator = i.get("operator") or "over"
         #outline = i.get("outline")
         #radius = i.get("radius")
         #rounded_image = mask_edges(image, radius)
@@ -61,7 +72,8 @@ def overlay_images(canvas, image_description):
             image=image,
             left=x,
             top=y,
-            operator="over")
+            operator=operator)
+    image_description = []
 
 #def mask_edges(img, radius):  # TODO: doesn't work
 #    res = img.clone()

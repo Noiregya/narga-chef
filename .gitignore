@@ -1,7 +1,10 @@
 .env
+render/__pycache__/*
+render/themes/__pycache__/*
+dao/__pycache__
+__pycache__/*
 prices.txt
 narga
-dao/__pycache__
 run.sh
 bin/*
 lib/*
@@ -11,9 +14,8 @@ logs/*
 out.logs
 pyvenv.cfg
 update
-__pycache__/*
 icon.png
 s_icon.png
 render.svg
 render/*.png
-render/__pycache__/*
+*.png

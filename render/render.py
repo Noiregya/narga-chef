@@ -2,19 +2,21 @@
 
 import os
 #import base64
+import glob
+import importlib
 from datetime import datetime, timedelta
+from os.path import dirname, basename, isfile, join
 import aiohttp
 from dotenv import load_dotenv
-from wand.image import Image, CHANNELS
+from wand.image import Image
 from wand.exceptions import BaseError
 from wand.color import Color
 from wand.drawing import Drawing
 from wand.compat import nested
 import render.render_tools as render_tools
-import render.snowflakes as snowflakes
-
 
 load_dotenv()
+THEME_DIR = "themes"
 CACHE_DURATION = os.environ.get("cache_duration") or "24"
 CACHE_DURATION = int(CACHE_DURATION)
 # Recommanded size for guild cards: 960x540
@@ -26,10 +28,33 @@ SMALL_ICON = 48
 S_RX = 5
 NB_COL = 9
 
-
 WIDTH = 540
 HEIGHT = 300
 
+
+def load_theme(theme_name):
+    """Loads one of the themes from the database"""
+    all_themes = list_themes()
+    try:
+        pkg = importlib.import_module(f".{theme_name}", "render.themes")
+    except ImportError:
+        name =  all_themes[0]
+        pkg = importlib.import_module(f".{name}", "render.themes")
+    return pkg.init(WIDTH, HEIGHT)
+
+def list_themes():
+    """List all the themes available"""
+    modules = glob.glob(join(f"{dirname(__file__)}/{THEME_DIR}", "*.py"))
+    return [ basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
+
+
+def check_theme_exist(theme_name):
+    """Return an error if the theme doesn't exist"""
+    all_themes = list_themes()
+    for theme in all_themes:
+        if theme == theme_name:
+            return False
+    return f"List of available themes: {all_themes}"
 
 def generate_guild_card(
     path,
@@ -39,7 +64,7 @@ def generate_guild_card(
     balance,
     points,
     rank,
-    theme = snowflakes,
+    theme,
     achievements=None,
     pfp=None,
     next_req_str=None,
@@ -48,11 +73,11 @@ def generate_guild_card(
     if achievements is None:
         achievements = []
 
-    theme = snowflakes.Snowflakes(WIDTH, HEIGHT)
+    # Draw background
+    with nested(render_tools.TRANSPARENT, Color("#00000000"), Drawing()) as (b_bg, b_fg, bg_canvas):
+        theme.render_background(bg_canvas, seed = discord_id)
 
     with nested(render_tools.TRANSPARENT, Color("#00000000"), Drawing()) as (bg, fg, canvas):
-        # Draw background
-        theme.render_background(canvas, seed = discord_id)
         theme.render_border(canvas)
         # Title
         theme.render_title(canvas, name)

@@ -1,9 +1,13 @@
 """Snowy theme"""
+from wand.image import Image
 import math
 import render.render_tools as render_tools
 import render.base_theme as base_theme
 
-
+def init(width, height):
+    """Get an instance of the class"""
+    return Snowflakes(width, height)
+    
 class Snowflakes(base_theme.BaseTheme):
     """Snowy theme"""
     def __init__(self, width, height):
@@ -11,12 +15,6 @@ class Snowflakes(base_theme.BaseTheme):
         self.base_color = "#7fc1ff"
         self.line_h = 0
         self.line_w = 0
-
-    def render_background(self, canvas, seed = 0):
-        """Renders a background for the theme"""
-        canvas.stroke_width = self.stroke
-        # Background
-        snowflake_generator(canvas, self.width, self.height, seed, self.base_color)
 
     def render_border(self, canvas, seed = 0):
         """Renders borders for the theme"""
@@ -30,6 +28,16 @@ class Snowflakes(base_theme.BaseTheme):
             outline=self.base_color,
             radius=self.rx,
         )
+
+    def render_background(self, canvas, seed = 0):
+        """Renders a background for the theme"""
+        canvas.stroke_width = self.stroke
+        # Background
+        snowflake_generator(canvas, self.width, self.height, seed, self.base_color)
+        with Image(width=self.width, height=self.height, background=render_tools.TRANSPARENT) as img:
+            canvas(img)
+            img.format = 'png'
+            self.background = img.make_blob()
 
     def render_title(self, canvas, text, seed = 0):
         """Renders a title for the theme"""

@@ -20,6 +20,7 @@ class BaseTheme:
         self.nb_col = 9
         self.stroke = 3
         self.image_desc = []
+        self.background = None
 
     def render_background(self, canvas, seed = 0):
         """Renders a background for the theme"""
@@ -47,4 +48,6 @@ class BaseTheme:
         with Image(width=self.width, height=self.height, background=render_tools.TRANSPARENT) as img:
             canvas(img)
             render_tools.overlay_images(img, self.image_desc)
-            img.save(filename=path)
+            with Image(blob = self.background) as background:
+                background.composite(img)
+                background.save(filename=path)
