@@ -723,10 +723,9 @@ async def get_card_image(db_member, db_guild, rank, pfp=None):
     db_achievements = dao.select_achievements(guild_id)
     db_achievement_attr = dao.select_achievement_attr(guild_id, member_id)
     db_theme = dao.get_rewards(guild_id, list_ident=[theme_id])
-    theme = db_theme[0]
     theme_name = ""
-    if (theme):
-        theme_name = theme[rewards.NAME]
+    if (db_theme and len(db_theme) > 0):
+        theme_name = db_theme[0][rewards.NAME]
     icon_achievements = []
     for ach in db_achievements:
         for attr in db_achievement_attr:
