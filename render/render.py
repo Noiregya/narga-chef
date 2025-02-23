@@ -14,6 +14,7 @@ from wand.color import Color
 from wand.drawing import Drawing
 from wand.compat import nested
 import render.render_tools as render_tools
+import render.themes as themes
 
 load_dotenv()
 THEME_DIR = "themes"
